@@ -1,0 +1,9 @@
+# raw downloads and local check files (rebuild with build/build_data.py)
+build/*.csv
+build/*.geojson
+build/data.json
+build/*.png
+build/light.html
+build/probe.html
+build/artifact.html
+.DS_Store

@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Toronto KSI Explorer</title>
+<meta name="description" content="Where and when people are killed or seriously injured on Toronto's roads: every Toronto Police Service KSI collision since 2006, mapped by intersection, ward and neighbourhood. Built from City of Toronto Open Data.">
+<style>
+  /* Layout: sticky app bar + shared filter bar; tab panels of KPI tiles over a two-column card grid; maps full width. */
+  :root{
+    color-scheme:light;
+    --plane:#f4f6f8; --surface:#fcfdfe; --ink:#0e1216; --ink2:#51565c; --muted:#7d838a;
+    --grid:#e4e8ec; --base:#c9ced4; --border:rgba(14,18,22,.10); --shadow:rgba(14,18,22,.06);
+    --accent:#2a78d6; --accent-ink:#1d63b8; --accent-soft:rgba(42,120,214,.12); --on-accent:#ffffff;
+    --killed:#184f95; --serious:#86b6ef;
+    --l1:#2a78d6; --l2:#eb6834; --l3:#1baf7a; --l4:#eda100; --l5:#e87ba4;
+    --r0:#e6effb; --r1:#cde2fb; --r2:#9ec5f4; --r3:#6da7ec; --r4:#3987e5; --r5:#256abf; --r6:#184f95; --r7:#0d366b;
+    --map-land:#eef1f3; --map-out:#e1e5e9; --map-water:#c9d8e6; --map-road:#ffffff; --map-case:#d5dae0;
+    --map-major:#f3dba8; --map-majcase:#d8b878; --map-rail:#c3c8ce; --map-label:#3b4148; --map-halo:#f4f6f8;
+    --map-area:rgba(60,70,85,.35);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --plane:#0c0e10; --surface:#17191c; --ink:#ffffff; --ink2:#b9bec4; --muted:#8d9298;
+      --grid:#26292d; --base:#3a3e44; --border:rgba(255,255,255,.12); --shadow:rgba(0,0,0,.4);
+      --accent:#3987e5; --accent-ink:#86b6ef; --accent-soft:rgba(57,135,229,.2); --on-accent:#ffffff;
+      --killed:#cde2fb; --serious:#2a78d6;
+      --l1:#3987e5; --l2:#d95926; --l3:#199e70; --l4:#c98500; --l5:#d55181;
+      --r0:#1a2a40; --r1:#1f3c63; --r2:#24548c; --r3:#2a6fbd; --r4:#3f92e6; --r5:#6da7ec; --r6:#a8c9f6; --r7:#e2eefc;
+      --map-land:#1b1e22; --map-out:#141619; --map-water:#0f1b27; --map-road:#353a41; --map-case:#24282d;
+      --map-major:#5b4f3a; --map-majcase:#3a3328; --map-rail:#3a3f46; --map-label:#c9ced4; --map-halo:#111316;
+      --map-area:rgba(200,210,225,.32);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --plane:#0c0e10; --surface:#17191c; --ink:#ffffff; --ink2:#b9bec4; --muted:#8d9298;
+    --grid:#26292d; --base:#3a3e44; --border:rgba(255,255,255,.12); --shadow:rgba(0,0,0,.4);
+    --accent:#3987e5; --accent-ink:#86b6ef; --accent-soft:rgba(57,135,229,.2); --on-accent:#ffffff;
+    --killed:#cde2fb; --serious:#2a78d6;
+    --l1:#3987e5; --l2:#d95926; --l3:#199e70; --l4:#c98500; --l5:#d55181;
+    --r0:#1a2a40; --r1:#1f3c63; --r2:#24548c; --r3:#2a6fbd; --r4:#3f92e6; --r5:#6da7ec; --r6:#a8c9f6; --r7:#e2eefc;
+    --map-land:#1b1e22; --map-out:#141619; --map-water:#0f1b27; --map-road:#353a41; --map-case:#24282d;
+    --map-major:#5b4f3a; --map-majcase:#3a3328; --map-rail:#3a3f46; --map-label:#c9ced4; --map-halo:#111316;
+    --map-area:rgba(200,210,225,.32);
+  }
+  *{box-sizing:border-box}
+  html,body{background:var(--plane)}
+  body{margin:0;color:var(--ink);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased;line-height:1.45}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 64px}
+  h1,h2{text-wrap:balance}
+
+  /* app bar */
+  .app-top{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;display:flex;align-items:center;gap:22px;
+    padding:10px 20px;background:color-mix(in srgb,var(--plane) 92%,transparent);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+  .app-brand{font-weight:700;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px;white-space:nowrap}
+  .app-dot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+  .app-tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .app-tab{font-family:var(--font);font-size:14px;font-weight:600;color:var(--ink2);background:none;
+    border:none;border-radius:8px;padding:7px 14px;cursor:pointer}
+  .app-tab:hover{background:var(--accent-soft)}
+  .app-tab[aria-selected="true"]{background:var(--accent);color:var(--on-accent)}
+  .app-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .app-upd{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  @media (max-width:760px){ .app-top{flex-wrap:wrap;gap:8px 16px} .app-upd{display:none} }
+
+  /* filter header */
+  header.top{border-bottom:1px solid var(--border);background:var(--plane)}
+  .head-inner{max-width:1180px;margin:0 auto;padding:18px 20px 14px;display:flex;flex-direction:column;gap:14px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  h1{font-size:22px;margin:2px 0 0;font-weight:700;letter-spacing:-.01em}
+  .sub{color:var(--ink2);font-size:13px;margin-top:3px;max-width:72ch}
+  .controls{display:flex;gap:12px 14px;flex-wrap:wrap;align-items:flex-end}
+  .ctl{min-width:0}
+  .ctl > label,.ctl > .lab{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);font-weight:600;margin-bottom:5px}
+  .seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px;flex-wrap:wrap}
+  .seg button{font-family:var(--font);font-size:13px;font-weight:600;color:var(--ink2);background:none;
+    border:none;border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+  .seg button:hover{color:var(--ink)}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+  .seg button:focus-visible,.sel:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .sel{font-family:var(--font);font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:8px 30px 8px 10px;cursor:pointer;appearance:none;-webkit-appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat;max-width:100%}
+  .years{display:flex;align-items:center;gap:6px}
+  .years span{color:var(--muted);font-size:13px}
+  .combo{position:relative}
+  .combo-btn{display:flex;align-items:center;gap:8px;width:280px;max-width:82vw;font-family:var(--font);
+    font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:8px 10px;cursor:pointer;text-align:left}
+  .combo-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .combo-btn .mag,.combo-btn .caret{color:var(--muted);font-size:12px;flex:none}
+  .combo-summary{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .combo-panel{position:absolute;z-index:45;top:calc(100% + 5px);left:0;width:330px;max-width:88vw;
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;box-shadow:0 10px 30px var(--shadow)}
+  .combo-panel input{width:100%;font-family:var(--font);font-size:14px;color:var(--ink);
+    background:var(--plane);border:1px solid var(--border);border-radius:7px;padding:7px 9px;margin-bottom:6px}
+  .combo-panel input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .combo-list{list-style:none;margin:0;padding:0;max-height:300px;overflow-y:auto}
+  .combo-list li{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:7px;cursor:pointer;font-size:13.5px;white-space:nowrap}
+  .combo-list li.active,.combo-list li:hover{background:var(--accent-soft)}
+  .combo-list .cb{width:15px;height:15px;border:1.5px solid var(--base);border-radius:4px;flex:none;
+    display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--on-accent);line-height:1}
+  .combo-list li[aria-selected="true"] .cb{background:var(--accent);border-color:var(--accent)}
+  .combo-list .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
+  .combo-list .reg{color:var(--muted);font-size:12px;flex:none;font-variant-numeric:tabular-nums}
+  .combo-list mark{background:var(--accent-soft);color:var(--ink);border-radius:3px;padding:0 1px}
+  .combo-empty{padding:10px;color:var(--muted);font-size:13px;cursor:default!important}
+  .combo-foot{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:7px;border-top:1px solid var(--border)}
+  .combo-foot span{font-size:12px;color:var(--muted)}
+  .linkbtn{font-family:var(--font);font-size:12.5px;color:var(--accent-ink);background:none;border:none;cursor:pointer;font-weight:600;padding:4px 6px;border-radius:6px}
+  .linkbtn:hover{background:var(--accent-soft)}
+  .linkbtn:focus-visible{outline:2px solid var(--accent)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:0}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink);background:var(--accent-soft);
+    border:none;border-radius:999px;padding:4px 10px;cursor:pointer;font-family:var(--font)}
+  .chip:hover{background:color-mix(in srgb,var(--accent) 24%,transparent)}
+  .chip .x{color:var(--muted);font-size:13px}
+
+  /* KPIs + cards */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0 8px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px var(--shadow);min-width:0}
+  .kpi .k-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .kpi .k-val{font-size:30px;font-weight:700;margin-top:6px;letter-spacing:-.02em}
+  .kpi .k-big{font-size:22px}
+  .kpi .k-delta{font-size:12.5px;margin-top:5px;color:var(--ink2)}
+  .kpi.lead{background:linear-gradient(135deg,#2a78d6,#1b5bb0);color:#fff;border:none}
+  .kpi.lead .k-label,.kpi.lead .k-delta{color:rgba(255,255,255,.86)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px 14px;box-shadow:0 1px 2px var(--shadow);min-width:0}
+  .card.full{grid-column:1 / -1}
+  .card h2{font-size:14.5px;margin:0;font-weight:700;letter-spacing:-.005em}
+  .card .note{font-size:12px;color:var(--muted);margin:2px 0 12px;max-width:80ch}
+  .card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .sec-h{grid-column:1/-1;margin:14px 2px 0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--accent-ink)}
+  .sw2{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 5px 0 2px;vertical-align:-1px}
+  .sec-h small{display:block;text-transform:none;letter-spacing:0;font-weight:500;color:var(--muted);font-size:12px;margin-top:3px}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink2);align-items:center}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .legend i.ln{height:3px;width:14px;border-radius:2px}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  svg text{font-family:var(--font)}
+  .axis{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+  .gridline{stroke:var(--grid);stroke-width:1}
+  .baseline{stroke:var(--base);stroke-width:1}
+  .val-lbl{fill:var(--ink);font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}
+  .end-lbl{fill:var(--ink2);font-size:11.5px;font-weight:600}
+
+  /* bar rows */
+  .bars{display:flex;flex-direction:column;gap:5px}
+  .barrow{display:flex;align-items:center;gap:8px;font-size:12.5px;border-radius:6px}
+  .barrow[data-tip]{cursor:default}
+  .barrow.click{cursor:pointer}
+  .barrow.click:hover .lbl{color:var(--accent-ink);text-decoration:underline}
+  .barrow .lbl{width:170px;flex:none;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .barrow.wide .lbl{width:250px}
+  .barrow .track{flex:1;height:14px;display:flex;gap:2px;min-width:0}
+  .barrow .fill{height:100%;flex:none}
+  .barrow .fill:last-child{border-radius:0 4px 4px 0}
+  .barrow .fill.k{background:var(--killed)} .barrow .fill.s{background:var(--serious)} .barrow .fill.one{background:var(--accent)}
+  .barrow .val{width:56px;flex:none;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .barrow .pct{width:44px;flex:none;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:11.5px}
+  .barrow.dim .lbl{color:var(--muted)}
+  .empty{color:var(--muted);font-size:13px;padding:8px 0}
+  @media (max-width:520px){ .barrow .lbl,.barrow.wide .lbl{width:118px} .barrow .pct{display:none} }
+
+  /* maps */
+  .map-wrap{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--map-out)}
+  .map-wrap canvas{display:block;width:100%;height:560px;cursor:grab;touch-action:none}
+  .map-wrap canvas.grabbing{cursor:grabbing}
+  .map-wrap.choro canvas{height:520px}
+  @media (max-width:640px){ .map-wrap canvas{height:420px} .map-wrap.choro canvas{height:380px} }
+  .map-ctrls{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:2}
+  .map-ctrls button{font-family:var(--font);font-size:15px;font-weight:600;color:var(--ink);
+    background:color-mix(in srgb,var(--surface) 90%,transparent);border:1px solid var(--border);
+    border-radius:7px;min-width:32px;height:32px;cursor:pointer;line-height:1;backdrop-filter:blur(4px)}
+  .map-ctrls button:hover{background:var(--surface)}
+  .map-ctrls button:focus-visible{outline:2px solid var(--accent)}
+  .map-ctrls .reset{padding:0 10px;font-size:12px}
+  .map-legend{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;color:var(--ink2);flex-wrap:wrap}
+  .map-ramp{display:inline-flex;align-items:center;gap:5px}
+  .map-ramp i{display:inline-block;border-radius:50%}
+  .map-steps{display:inline-flex;gap:2px}
+  .map-steps i{display:inline-block;width:26px;height:10px}
+  .map-steps i:first-child{border-radius:3px 0 0 3px} .map-steps i:last-child{border-radius:0 3px 3px 0}
+  .map-note{font-size:12px;color:var(--muted)}
+  .detail{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
+  .detail h3{font-size:13.5px;margin:0 0 2px}
+  .detail .meta{font-size:12px;color:var(--muted);margin-bottom:8px}
+
+  /* heatmap */
+  .hm-scale{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);margin-top:8px}
+
+  /* tables */
+  details.tablewrap{margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 18px}
+  details.tablewrap summary{cursor:pointer;font-weight:600;font-size:13.5px;padding:10px 0}
+  .tscroll{overflow-x:auto;max-height:520px;overflow-y:auto}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums;margin:4px 0 14px}
+  th,td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+  th:first-child,td:first-child,th.l,td.l{text-align:left}
+  thead th{color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;position:sticky;top:0;background:var(--surface)}
+  thead th.sort{cursor:pointer;user-select:none}
+  thead th.sort:hover{color:var(--ink)}
+  thead th[aria-sort="descending"]::after{content:" \25BE"} thead th[aria-sort="ascending"]::after{content:" \25B4"}
+  tbody tr.pick{cursor:pointer}
+  tbody tr.pick:hover td{background:var(--accent-soft)}
+  tbody tr.on td{background:var(--accent-soft);font-weight:600}
+  .delta-up{color:#c53a3a} .delta-dn{color:#1a7f37}
+  :root[data-theme="dark"] .delta-up{color:#f08080} :root[data-theme="dark"] .delta-dn{color:#5fd07a}
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .delta-up{color:#f08080} :root:not([data-theme="light"]) .delta-dn{color:#5fd07a} }
+
+  .tt{position:fixed;pointer-events:none;z-index:60;background:var(--ink);color:var(--surface);
+    font-size:12px;line-height:1.4;padding:7px 9px;border-radius:7px;opacity:0;transition:opacity .1s;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:280px;font-variant-numeric:tabular-nums;left:0;top:0}
+  .tt .r{display:flex;justify-content:space-between;gap:14px}
+  .tt .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
+  .tt .sub2{opacity:.7;font-size:11px;margin-top:3px}
+
+  footer.foot{margin-top:26px;color:var(--muted);font-size:12px;line-height:1.6;max-width:110ch}
+  footer.foot a,.about a{color:var(--accent-ink)}
+  .hl{color:var(--ink);font-weight:600}
+  .about{max-width:76ch;font-size:14px;color:var(--ink2);line-height:1.6}
+  .about h2{font-size:16px;color:var(--ink);margin:26px 0 6px}
+  .about dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:8px 0}
+  .about dt{font-weight:600;color:var(--ink)}
+  .about dd{margin:0}
+  @media (max-width:820px){ .kpis{grid-template-columns:repeat(2,1fr)} .grid{grid-template-columns:1fr} }
+  @media (max-width:560px){ .about dl{grid-template-columns:1fr} .about dd{margin-bottom:6px} .kpi .k-val{font-size:25px} }
+  @media (max-width:640px){ .wrap,.head-inner,.app-top{padding-left:16px;padding-right:16px} .combo-btn{width:100%} .combo{width:100%} .ctl.area{width:100%} }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div class="app-brand"><span class="app-dot" aria-hidden="true"></span>Toronto KSI Explorer</div>
+  <nav class="app-tabs" role="tablist" aria-label="Views">
+    <button class="app-tab" id="tab-collisions" data-tab="collisions" role="tab" aria-selected="true" aria-controls="panel-collisions">Collisions</button>
+    <button class="app-tab" id="tab-people" data-tab="people" role="tab" aria-selected="false" aria-controls="panel-people">People</button>
+    <button class="app-tab" id="tab-areas" data-tab="areas" role="tab" aria-selected="false" aria-controls="panel-areas">Wards &amp; neighbourhoods</button>
+    <button class="app-tab" id="tab-about" data-tab="about" role="tab" aria-selected="false" aria-controls="panel-about">About the data</button>
+  </nav>
+  <div class="app-upd" id="appUpd"></div>
+</header>
+
+<header class="top" id="filters">
+  <div class="head-inner">
+    <div>
+      <div class="eyebrow" id="hEyebrow">Toronto Police Service KSI collisions</div>
+      <h1 id="hTitle">Where &amp; when people are killed or seriously injured</h1>
+      <div class="sub" id="hSub"></div>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <span class="lab" id="lvlLab">Geography</span>
+        <div class="seg" role="group" aria-labelledby="lvlLab">
+          <button type="button" data-lvl="ward" aria-pressed="true">Ward</button>
+          <button type="button" data-lvl="nb" aria-pressed="false">Neighbourhood</button>
+        </div>
+      </div>
+      <div class="ctl area">
+        <label for="areaInput" id="areaLab">Ward</label>
+        <div class="combo" id="combo">
+          <button type="button" class="combo-btn" id="comboBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="areaLab comboSummary">
+            <span class="mag" aria-hidden="true">&#9906;</span>
+            <span class="combo-summary" id="comboSummary">All of Toronto</span>
+            <span class="caret" aria-hidden="true">&#9662;</span>
+          </button>
+          <div class="combo-panel" id="comboPanel" hidden>
+            <input id="areaInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search a ward..." aria-controls="areaList">
+            <ul id="areaList" class="combo-list" role="listbox" aria-multiselectable="true" aria-label="Areas"></ul>
+            <div class="combo-foot"><span id="selCount"></span><button type="button" class="linkbtn" id="selClear">Show all of Toronto</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="ctl">
+        <span class="lab" id="yrLab">Years</span>
+        <div class="years" role="group" aria-labelledby="yrLab">
+          <select class="sel" id="yFrom" aria-label="From year"></select><span>to</span><select class="sel" id="yTo" aria-label="To year"></select>
+        </div>
+      </div>
+      <div class="ctl">
+        <label for="involve">Collisions involving</label>
+        <select class="sel" id="involve">
+          <option value="-1">Any road user or factor</option>
+          <optgroup label="Road user">
+            <option value="0">A pedestrian</option>
+            <option value="1">A cyclist</option>
+            <option value="2">A motorcyclist</option>
+            <option value="3">E-scooter / other micromobility</option>
+            <option value="4">A heavy truck</option>
+            <option value="5">An older adult</option>
+            <option value="6">A school-age child</option>
+          </optgroup>
+          <optgroup label="Driver factor">
+            <option value="7">Aggressive driving</option>
+            <option value="8">Distracted driving</option>
+            <option value="10">Speeding</option>
+            <option value="11">Alcohol or drugs</option>
+            <option value="9">Red-light running</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="ctl" id="measCtl">
+        <span class="lab" id="measLab">Count</span>
+        <div class="seg" role="group" aria-labelledby="measLab">
+          <button type="button" data-meas="ksi" aria-pressed="true">People KSI</button>
+          <button type="button" data-meas="k" aria-pressed="false">People killed</button>
+          <button type="button" data-meas="c" aria-pressed="false">Collisions</button>
+        </div>
+      </div>
+    </div>
+    <div class="chips" id="chips" aria-live="polite"></div>
+  </div>
+</header>
+
+<!-- ======================= COLLISIONS ======================= -->
+<section class="tab-panel" id="panel-collisions" role="tabpanel" aria-labelledby="tab-collisions">
+<div class="wrap">
+  <section class="kpis" id="c_kpis" aria-live="polite"></section>
+  <div class="grid">
+    <div class="card full">
+      <div class="card-h">
+        <div><h2 id="mapTitle">Where it happens</h2>
+        <div class="note">Each bubble is a collision location, usually an intersection. Bigger and more intense means more. Nearby locations merge when zoomed out and split as you zoom in. Hover for the location, click to list its collisions. Scroll or pinch to zoom, drag to pan.</div></div>
+      </div>
+      <div class="map-wrap">
+        <div class="map-ctrls">
+          <button type="button" id="mZoomIn" aria-label="Zoom in">+</button>
+          <button type="button" id="mZoomOut" aria-label="Zoom out">&minus;</button>
+          <button type="button" class="reset" id="mReset">Reset</button>
+        </div>
+        <canvas id="crashMap" role="img" aria-label="Map of KSI collision locations in Toronto"></canvas>
+      </div>
+      <div class="map-legend">
+        <span>Fewer</span><span class="map-ramp" id="mRamp"></span><span id="mRampMax">More</span>
+        <span class="map-note" id="mNote" style="margin-left:auto"></span>
+      </div>
+      <div class="detail" id="mDetail" hidden></div>
+    </div>
+
+    <div class="card"><h2>Locations with the most <span class="mw">people KSI</span></h2><div class="note">Click a location to zoom the map to it.</div><div id="c_locs" class="bars"></div></div>
+    <div class="card"><h2>Streets with the most <span class="mw">people KSI</span></h2><div class="note">A collision at an intersection counts toward both streets.</div><div id="c_streets" class="bars"></div></div>
+
+    <div class="card full">
+      <div class="card-h"><div><h2>By year</h2><div class="note" id="c_yearNote"></div></div><div class="legend" id="c_yearLeg"></div></div>
+      <div id="c_year"></div>
+    </div>
+
+    <div class="card full">
+      <div class="card-h"><div><h2>Day of week and hour</h2><div class="note">Cell colour follows the scale below the chart. The busiest hour is outlined.</div></div></div>
+      <div id="c_heat"></div>
+    </div>
+
+    <div class="sec-h">How collisions happen<small>Bars split into <span id="legInline"></span></small></div>
+    <div class="card"><h2>Collision type</h2><div class="note">Initial impact type recorded by police</div><div id="c_impact" class="bars"></div></div>
+    <div class="card"><h2>Driver factors</h2><div class="note">Share of the selection where police recorded the factor. A collision can have several.</div><div id="c_factors" class="bars"></div></div>
+    <div class="card"><h2>Where on the street</h2><div class="note">Location relative to an intersection</div><div id="c_accloc" class="bars"></div></div>
+    <div class="card"><h2>Traffic control</h2><div class="note">Control present at the location</div><div id="c_ctl" class="bars"></div></div>
+    <div class="card"><h2>Road class</h2><div class="note">City road classification</div><div id="c_road" class="bars"></div></div>
+    <div class="card"><h2>By month</h2><div class="note" id="c_monthNote"></div><div id="c_month" class="bars"></div></div>
+    <div class="card"><h2>Light</h2><div class="note">Lighting at the time of the collision</div><div id="c_light" class="bars"></div></div>
+    <div class="card"><h2>Road surface</h2><div class="note">Surface condition at the time of the collision</div><div id="c_surface" class="bars"></div></div>
+  </div>
+
+  <details class="tablewrap" id="c_tableWrap">
+    <summary id="c_tableSum">Show collision list (current selection)</summary>
+    <div class="tscroll"><table id="c_table"></table></div>
+  </details>
+  <footer class="foot" id="foot1"></footer>
+</div>
+</section>
+
+<!-- ======================= PEOPLE ======================= -->
+<section class="tab-panel" id="panel-people" role="tabpanel" aria-labelledby="tab-people" hidden>
+<div class="wrap">
+  <section class="kpis" id="p_kpis" aria-live="polite"></section>
+  <div class="grid">
+    <div class="card"><h2>Who is killed or seriously injured</h2><div class="note">People KSI by how they were travelling</div><div id="p_ru" class="bars"></div></div>
+    <div class="card"><h2>Age</h2><div class="note" id="p_ageNote">People KSI by age group</div><div id="p_age" class="bars"></div></div>
+    <div class="card full">
+      <div class="card-h"><div><h2>People KSI by year and road user</h2><div class="note">Selected years are shaded. Hover for the values in a year.</div></div><div class="legend" id="p_lineLeg"></div></div>
+      <div id="p_line"></div>
+    </div>
+    <div class="sec-h">The vehicles and drivers involved<small>Every vehicle and driver in the selected collisions, whether or not they were hurt</small></div>
+    <div class="card"><h2>Vehicles involved</h2><div class="note">Vehicles in the selected collisions</div><div id="p_veh" class="bars"></div></div>
+    <div class="card"><h2>What drivers were doing</h2><div class="note">Driver action recorded by police</div><div id="p_da" class="bars"></div></div>
+    <div class="card"><h2>Driver condition</h2><div class="note">Condition recorded for drivers</div><div id="p_dc" class="bars"></div></div>
+    <div class="card"><h2>Vehicle manoeuvre</h2><div class="note">What drivers in the selection were doing just before</div><div id="p_mv" class="bars"></div></div>
+    <div class="sec-h">Pedestrians and cyclists<small>Pedestrians and cyclists who were killed or seriously injured</small></div>
+    <div class="card"><h2>Pedestrian collision type</h2><div class="note" id="p_ptNote"></div><div id="p_pt" class="bars"></div></div>
+    <div class="card"><h2>What the pedestrian was doing</h2><div class="note">Pedestrian action recorded by police</div><div id="p_pa" class="bars"></div></div>
+    <div class="card full"><h2>Cyclist collision type</h2><div class="note" id="p_ctNote"></div><div id="p_ct" class="bars"></div></div>
+  </div>
+  <details class="tablewrap">
+    <summary>Show data table (people KSI by year and road user)</summary>
+    <div class="tscroll"><table id="p_table"></table></div>
+  </details>
+  <footer class="foot" id="foot2"></footer>
+</div>
+</section>
+
+<!-- ======================= AREAS ======================= -->
+<section class="tab-panel" id="panel-areas" role="tabpanel" aria-labelledby="tab-areas" hidden>
+<div class="wrap">
+  <section class="kpis" id="a_kpis" aria-live="polite"></section>
+  <div class="grid">
+    <div class="card full">
+      <div class="card-h">
+        <div><h2 id="a_mapTitle">Comparing areas</h2><div class="note">Click an area to add it to the selection. Every tab follows the selection.</div></div>
+        <div class="ctl"><span class="lab" id="normLab" style="display:none">Scale</span>
+          <div class="seg" role="group" aria-label="Map scale">
+            <button type="button" data-norm="total" aria-pressed="true">Total</button>
+            <button type="button" data-norm="km2" aria-pressed="false">Per km&sup2;</button>
+          </div></div>
+      </div>
+      <div class="map-wrap choro">
+        <div class="map-ctrls">
+          <button type="button" id="aZoomIn" aria-label="Zoom in">+</button>
+          <button type="button" id="aZoomOut" aria-label="Zoom out">&minus;</button>
+          <button type="button" class="reset" id="aReset">Reset</button>
+        </div>
+        <canvas id="choroMap" role="img" aria-label="Choropleth map of Toronto areas"></canvas>
+      </div>
+      <div class="map-legend"><span id="a_legLo"></span><span class="map-steps" id="a_steps"></span><span id="a_legHi"></span><span class="map-note" id="a_legNote" style="margin-left:auto"></span></div>
+    </div>
+    <div class="card full">
+      <div class="card-h"><div><h2 id="a_tblTitle">Ranking</h2><div class="note" id="a_tblNote"></div></div></div>
+      <div class="tscroll" style="max-height:640px"><table id="a_table"></table></div>
+    </div>
+  </div>
+  <footer class="foot" id="foot3"></footer>
+</div>
+</section>
+
+<!-- ======================= ABOUT ======================= -->
+<section class="tab-panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
+<div class="wrap"><div class="about" id="aboutBody"></div></div>
+</section>
+
+<div class="tt" id="tt" role="tooltip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+</script>
+<script>
+(function(){
+"use strict";
+/* ============================== decode ============================== */
+const Q = DATA.q, DICT = DATA.dict, FLAGS = DATA.flags, AGE = DATA.ageBands;
+const C = DATA.C, P = DATA.P, LOCS = DATA.L;
+const NC = C.day.length, NP = P.c.length;
+const EPOCH = Date.UTC(2006,0,1);
+const cYear = new Int16Array(NC), cMon = new Int8Array(NC), cDow = new Int8Array(NC), cHour = new Int8Array(NC);
+for (let i=0;i<NC;i++){ const d=new Date(EPOCH+C.day[i]*864e5); cYear[i]=d.getUTCFullYear(); cMon[i]=d.getUTCMonth(); cDow[i]=(d.getUTCDay()+6)%7; cHour[i]=Math.floor(C.min[i]/60); }
+const NL = LOCS.lat.length, locLat=new Float64Array(NL), locLon=new Float64Array(NL);
+for (let i=0;i<NL;i++){ locLat[i]=LOCS.lat[i]*Q; locLon[i]=LOCS.lon[i]*Q; }
+const YEARS=[]; for (let y=cYear[0]; y<=cYear[NC-1]; y++) YEARS.push(y);
+const Y0=YEARS[0], YN=YEARS[YEARS.length-1];
+const UPDATED = DATA.meta.updated;   // last collision date in the extract
+const updDate = new Date(UPDATED+"T00:00:00Z");
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS_L=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const fmtDate = d => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+const partialNote = `${YN} runs to ${MONTHS_L[updDate.getUTCMonth()]} ${updDate.getUTCDate()}`;
+// persons by collision
+const pStart = new Int32Array(NC+1); { const cnt=new Int32Array(NC); for(let i=0;i<NP;i++) cnt[P.c[i]]++; for(let i=0;i<NC;i++) pStart[i+1]=pStart[i]+cnt[i]; }
+const INJ_FATAL=DICT.inj.indexOf("Fatal"), INJ_MAJOR=DICT.inj.indexOf("Major");
+const RU = DICT.ru, RU_DRIVER=RU.indexOf("Driver"), RU_PED=RU.indexOf("Pedestrian"), RU_CYC=RU.indexOf("Cyclist");
+
+function decodeFlat(arr){ const out=[]; let i=0;
+  while(i<arr.length){ const n=arr[i++]; const a=new Float64Array(n*2); let x=0,y=0;
+    for(let k=0;k<n;k++){ x+=arr[i++]; y+=arr[i++]; a[2*k]=x*Q; a[2*k+1]=y*Q; } out.push(a); }
+  return out; }
+function bboxOf(lines){ let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(const a of lines) for(let k=0;k<a.length;k+=2){ const x=a[k],y=a[k+1]; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+  return [x0,x1,y0,y1]; }
+function chunked(lines){ return lines.map(a=>({a,bb:bboxOf([a])})); }
+const GEO = {
+  land: chunked(decodeFlat(DATA.geo.land)), lake: chunked(decodeFlat(DATA.geo.lake)),
+  roads: Object.fromEntries(Object.entries(DATA.geo.roads).map(([k,v])=>[k,chunked(decodeFlat(v))])),
+  ward: DATA.geo.wards.map((w,i)=>{ const r=decodeFlat(w.rings); return {name:DATA.wards[i].name, code:DATA.wards[i].code, rings:r, bb:bboxOf(r), km2:w.km2, lab:[w.lab[0]*Q,w.lab[1]*Q]}; }),
+  nb: DATA.geo.nbs.map((n,i)=>{ const r=decodeFlat(n.rings); return {name:DATA.nbs[i], rings:r, bb:bboxOf(r), km2:n.km2, lab:[n.lab[0]*Q,n.lab[1]*Q]}; }),
+};
+const AREA_NAME = { ward: GEO.ward.map(w=>`${w.name} (${w.code})`), nb: GEO.nb.map(n=>n.name) };
+const CITY_BB = bboxOf(GEO.land.map(c=>c.a));
+
+/* ============================== state ============================== */
+const S = { tab:"collisions", lvl:"ward", sel:{ward:new Set(), nb:new Set()}, y0:Y0, y1:YN, inv:-1, meas:"ksi", norm:"total", sort:{key:"v",dir:-1}, pick:null };
+const curSel = () => S.sel[S.lvl];
+const areaOf = i => S.lvl==="ward" ? C.ward[i] : C.nb[i];
+
+/* filter -> mask of collisions; opts.allYears ignores the year range */
+function mask(opts={}){
+  const m=new Uint8Array(NC), sel=curSel(), useSel=sel.size>0 && !opts.allAreas, bit=S.inv>=0?(1<<S.inv):0;
+  for(let i=0;i<NC;i++){
+    if(!opts.allYears && (cYear[i]<S.y0||cYear[i]>S.y1)) continue;
+    if(bit && !(C.flags[i]&bit)) continue;
+    if(useSel && !sel.has(areaOf(i))) continue;
+    m[i]=1; }
+  return m; }
+// measure split: [dark part, light part]
+function split(i){ return S.meas==="c" ? [C.fatal[i], 1-C.fatal[i]] : S.meas==="k" ? [C.K[i],0] : [C.K[i],C.S[i]]; }
+const MW = { ksi:"people KSI", k:"people killed", c:"collisions" };
+const PARTS = { ksi:["Killed","Seriously injured"], k:["Killed",null], c:["Fatal collisions","Non-fatal collisions"] };
+
+/* ============================== helpers ============================== */
+const $ = id => document.getElementById(id);
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = n => Math.round(n).toLocaleString("en-CA");
+const pct = (a,b) => b? (100*a/b) : 0;
+const pctS = (a,b) => { const p=pct(a,b); return (p>0&&p<1? p.toFixed(1): Math.round(p))+"%"; };
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || "#888";
+const NS="http://www.w3.org/2000/svg";
+const tt=$("tt");
+function showTT(html,ev){ tt.innerHTML=html; tt.style.opacity="1";
+  let x=ev.clientX+14,y=ev.clientY+14; const w=tt.offsetWidth,h=tt.offsetHeight;
+  if(x+w>innerWidth-8)x=ev.clientX-w-14; if(y+h>innerHeight-8)y=ev.clientY-h-14;
+  tt.style.left=Math.max(4,x)+"px"; tt.style.top=Math.max(4,y)+"px"; }
+function hideTT(){ tt.style.opacity="0"; }
+const ttRow = (k,v,sw) => `<div class="r"><span>${sw?`<i class="sw" style="background:${sw}"></i>`:""}${esc(k)}</span><b>${v}</b></div>`;
+function yrsLabel(){ return S.y0===S.y1? String(S.y0) : `${S.y0}–${S.y1}`; }
+function selLabel(){ const s=[...curSel()]; if(!s.length) return "All of Toronto";
+  if(s.length===1) return AREA_NAME[S.lvl][s[0]]; return `${s.length} ${S.lvl==="ward"?"wards":"neighbourhoods"}`; }
+function invLabel(){ const o=$("involve").selectedOptions[0]; return S.inv<0? "" : o.textContent.replace(/^(A|An) /,"").toLowerCase(); }
+function countRamp(){ return ["--r1","--r2","--r3","--r4","--r5","--r6","--r7"].map(cssv); }
+
+/* bar list: items {label, a, b, tip?, onClick?, dim?}; total=a+b; shared scale */
+function bars(el, items, o={}){
+  el=typeof el==="string"?$(el):el;
+  if(!items.length || items.every(i=>i.a+i.b===0)){ el.innerHTML=`<div class="empty">${o.empty||"Nothing recorded for this selection."}</div>`; return; }
+  const max=Math.max(1,...items.map(i=>i.a+i.b)), tot=o.total!=null?o.total:items.reduce((s,i)=>s+i.a+i.b,0);
+  const [pa,pb]=o.parts||PARTS[S.meas];
+  el.innerHTML=items.map((it,ix)=>{ const t=it.a+it.b, wa=100*it.a/max, wb=100*it.b/max;
+    const segs=!pb? `<span class="fill one" style="width:${(wa+wb).toFixed(2)}%"></span>` : (it.a>0?`<span class="fill k" style="width:calc(${wa.toFixed(2)}% - ${it.b>0?1:0}px)"></span>`:"")+(it.b>0?`<span class="fill s" style="width:calc(${wb.toFixed(2)}% - ${it.a>0?1:0}px)"></span>`:"");
+    return `<div class="barrow${o.wide?" wide":""}${it.onClick?" click":""}${it.dim?" dim":""}" data-ix="${ix}" ${it.onClick?'role="button" tabindex="0"':""}><span class="lbl" title="${esc(it.label)}">${esc(it.label)}</span><span class="track">${segs}</span><span class="val">${fmt(t)}</span>${o.noPct?"":`<span class="pct">${o.pctOf?o.pctOf(it):pctS(t,tot)}</span>`}</div>`; }).join("");
+  el.onmousemove=e=>{ const r=e.target.closest(".barrow"); if(!r){hideTT();return;} const it=items[+r.dataset.ix];
+    let h=`<b>${esc(it.label)}</b>`; if(pb) { h+=ttRow(pa,fmt(it.a),cssv("--killed"))+ttRow(pb,fmt(it.b),cssv("--serious")); } h+=ttRow("Total",fmt(it.a+it.b));
+    if(it.tip) h+=`<div class="sub2">${it.tip}</div>`; showTT(h,e); };
+  el.onmouseleave=hideTT;
+  el.onclick=e=>{ const r=e.target.closest(".barrow.click"); if(r) items[+r.dataset.ix].onClick(); };
+  el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ const r=e.target.closest(".barrow.click"); if(r){ e.preventDefault(); items[+r.dataset.ix].onClick(); } } };
+}
+// aggregate collisions by a code array into dictionary labels
+function byCode(m, codes, labels, o={}){
+  const a=new Float64Array(labels.length), b=new Float64Array(labels.length);
+  for(let i=0;i<NC;i++){ if(!m[i]) continue; const c=codes[i]; if(c<0) continue; const [x,y]=split(i); a[c]+=x; b[c]+=y; }
+  let items=labels.map((l,i)=>({label:l,a:a[i],b:b[i]}));
+  if(o.order) items=o.order.map(l=>items.find(x=>x.label===l)).filter(Boolean);
+  else items.sort((p,q)=>(q.a+q.b)-(p.a+p.b));
+  if(o.last) { const tail=items.filter(x=>o.last.includes(x.label)); items=items.filter(x=>!o.last.includes(x.label)).concat(tail); }
+  if(o.dropZero) items=items.filter(x=>x.a+x.b>0);
+  return items; }
+function measTotal(m){ let a=0,b=0; for(let i=0;i<NC;i++) if(m[i]){ const [x,y]=split(i); a+=x; b+=y; } return [a,b]; }
+
+/* ============================== map view (shared pan/zoom) ============================== */
+const COSF = Math.cos(43.7*Math.PI/180);
+class MapView{
+  constructor(canvas, o){ this.cv=canvas; this.o=o; this.ctx=canvas.getContext("2d"); this.v=null; this.raf=0; this.ptrs=new Map();
+    new ResizeObserver(()=>this.resize()).observe(canvas); this.bind(); }
+  resize(){ const r=this.cv.getBoundingClientRect(); if(!r.width) return; const d=Math.min(2,window.devicePixelRatio||1);
+    this.W=r.width; this.H=r.height; this.cv.width=Math.round(r.width*d); this.cv.height=Math.round(r.height*d); this.dpr=d;
+    if(this.bb && !this.touched) this.fit(this.bb); this.draw(); }
+  fit(bb, pad=0.9){ this.bb=bb; if(!this.W) return; const lo=Math.max(bb[1]-bb[0],0.006), la=Math.max(bb[3]-bb[2],0.004);
+    const ppd=Math.min(this.W/(lo*COSF), this.H/la)*pad; this.v={lon:(bb[0]+bb[1])/2, lat:(bb[2]+bb[3])/2, ppd:Math.min(ppd,this.o.maxPpd||4e5)}; this.touched=false; }
+  px(lon){ return this.W/2+(lon-this.v.lon)*COSF*this.v.ppd; }
+  py(lat){ return this.H/2-(lat-this.v.lat)*this.v.ppd; }
+  ilon(x){ return this.v.lon+(x-this.W/2)/(COSF*this.v.ppd); }
+  ilat(y){ return this.v.lat-(y-this.H/2)/this.v.ppd; }
+  win(){ return [this.ilon(0),this.ilon(this.W),this.ilat(this.H),this.ilat(0)]; }
+  zoomAt(x,y,f){ if(!this.v) return; const np=Math.max(this.o.minPpd||800, Math.min(this.o.maxPpd||4e5, this.v.ppd*f)); if(np===this.v.ppd) return;
+    const lon=this.ilon(x), lat=this.ilat(y); this.v.ppd=np; this.v.lon=lon-(x-this.W/2)/(COSF*np); this.v.lat=lat+(y-this.H/2)/np; this.touched=true; this.draw(); }
+  draw(){ if(this.raf) return; this.raf=requestAnimationFrame(()=>{ this.raf=0; if(!this.W||!this.v) return;
+    const c=this.ctx; c.setTransform(this.dpr,0,0,this.dpr,0,0); c.clearRect(0,0,this.W,this.H); this.o.draw(c,this); }); }
+  local(e){ const r=this.cv.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; }
+  bind(){ const cv=this.cv; let drag=null, moved=false, pinch=null;
+    cv.addEventListener("wheel",e=>{ e.preventDefault(); const [x,y]=this.local(e); this.zoomAt(x,y,Math.exp(-e.deltaY*(e.deltaMode?0.05:0.0022))); },{passive:false});
+    cv.addEventListener("pointerdown",e=>{ cv.setPointerCapture(e.pointerId); this.ptrs.set(e.pointerId,this.local(e)); moved=false;
+      if(this.ptrs.size===1){ const [x,y]=this.local(e); drag={x,y,lon:this.v&&this.v.lon,lat:this.v&&this.v.lat}; }
+      else if(this.ptrs.size===2){ const p=[...this.ptrs.values()]; pinch={d:Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]),ppd:this.v.ppd}; drag=null; } });
+    cv.addEventListener("pointermove",e=>{ const [x,y]=this.local(e);
+      if(this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId,[x,y]);
+      if(pinch && this.ptrs.size===2){ const p=[...this.ptrs.values()], d=Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);
+        const cx=(p[0][0]+p[1][0])/2, cy=(p[0][1]+p[1][1])/2; this.zoomAt(cx,cy,(pinch.ppd*d/pinch.d)/this.v.ppd); moved=true; hideTT(); return; }
+      if(drag && this.v){ const dx=x-drag.x, dy=y-drag.y; if(Math.abs(dx)+Math.abs(dy)>3) moved=true;
+        if(moved){ cv.classList.add("grabbing"); this.v.lon=drag.lon-dx/(COSF*this.v.ppd); this.v.lat=drag.lat+dy/this.v.ppd; this.touched=true; this.draw(); hideTT(); return; } }
+      if(e.pointerType==="mouse" && this.o.hover) this.o.hover(x,y,e); });
+    const up=e=>{ this.ptrs.delete(e.pointerId); if(this.ptrs.size<2) pinch=null;
+      if(drag && !moved && this.o.click && e.type==="pointerup"){ const [x,y]=this.local(e); this.o.click(x,y,e); }
+      if(!this.ptrs.size){ drag=null; cv.classList.remove("grabbing"); } };
+    cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",up);
+    cv.addEventListener("pointerleave",()=>{ if(!this.ptrs.size) hideTT(); if(this.o.leave) this.o.leave(); });
+    cv.addEventListener("dblclick",e=>{ const [x,y]=this.local(e); this.zoomAt(x,y,1.8); }); }
+}
+// basemap: lake, land, rivers, rail, roads by zoom
+const ROADS=[ // key, min ppd to show, widths [far, near], major?
+  ["local",9000,[0.6,2.6],false], ["collector",4200,[0.8,3.2],false], ["minor",2200,[1,3.6],false],
+  ["major",0,[1.1,4.4],true], ["expressway",0,[1.6,5.2],true] ];
+function hitBB(bb,w){ return !(bb[1]<w[0]||bb[0]>w[1]||bb[3]<w[2]||bb[2]>w[3]); }
+function tracePolys(c,mv,chunks,w){ for(const ch of chunks){ if(!hitBB(ch.bb,w)) continue; const a=ch.a;
+  c.moveTo(mv.px(a[0]),mv.py(a[1])); for(let k=2;k<a.length;k+=2) c.lineTo(mv.px(a[k]),mv.py(a[k+1])); c.closePath(); } }
+function traceLines(c,mv,chunks,w){ let any=false; for(const ch of chunks){ if(!hitBB(ch.bb,w)) continue; any=true; const a=ch.a;
+  c.moveTo(mv.px(a[0]),mv.py(a[1])); for(let k=2;k<a.length;k+=2) c.lineTo(mv.px(a[k]),mv.py(a[k+1])); } return any; }
+function zf(mv){ return Math.max(0,Math.min(1,Math.log(mv.v.ppd/1500)/Math.log(40))); }
+function drawBase(c,mv,o={}){
+  const w=mv.win(), z=zf(mv);
+  c.fillStyle=cssv("--map-out"); c.fillRect(0,0,mv.W,mv.H);
+  c.beginPath(); tracePolys(c,mv,GEO.lake,w); c.fillStyle=cssv("--map-water"); c.fill("evenodd");
+  c.beginPath(); tracePolys(c,mv,GEO.land,w); c.fillStyle=cssv("--map-land"); c.fill("evenodd");
+  if(o.landOnly) return;
+  c.lineJoin="round"; c.lineCap="round";
+  c.beginPath(); if(traceLines(c,mv,GEO.roads.water,w)){ c.strokeStyle=cssv("--map-water"); c.lineWidth=1+2*z; c.stroke(); }
+  if(mv.v.ppd>3000){ c.beginPath(); if(traceLines(c,mv,GEO.roads.rail,w)){ c.strokeStyle=cssv("--map-rail"); c.lineWidth=1; c.stroke(); } }
+  const cR=cssv("--map-road"), cC=cssv("--map-case"), cM=cssv("--map-major"), cMC=cssv("--map-majcase");
+  for(const [k,min,wd,major] of ROADS){ if(mv.v.ppd<min) continue; c.beginPath(); if(!traceLines(c,mv,GEO.roads[k],w)) continue;
+    const lw=wd[0]+(wd[1]-wd[0])*z; if(z>0.3){ c.strokeStyle=major?cMC:cC; c.lineWidth=lw+1.6; c.stroke(); } c.strokeStyle=major?cM:cR; c.lineWidth=lw; c.stroke(); }
+}
+function areaGeo(){ return GEO[S.lvl]; }
+function drawAreaLines(c,mv,o={}){
+  const w=mv.win(), A=areaGeo(), sel=curSel();
+  c.beginPath(); for(const a of A){ if(!hitBB(a.bb,w)) continue; for(const r of a.rings){ c.moveTo(mv.px(r[0]),mv.py(r[1])); for(let k=2;k<r.length;k+=2) c.lineTo(mv.px(r[k]),mv.py(r[k+1])); c.closePath(); } }
+  c.strokeStyle=cssv("--map-area"); c.lineWidth=S.lvl==="ward"?1.1:0.8; c.stroke();
+  if(sel.size){ c.beginPath(); for(const i of sel){ for(const r of A[i].rings){ c.moveTo(mv.px(r[0]),mv.py(r[1])); for(let k=2;k<r.length;k+=2) c.lineTo(mv.px(r[k]),mv.py(r[k+1])); c.closePath(); } }
+    if(o.fillSel){ c.fillStyle=cssv("--accent-soft"); c.fill("evenodd"); }
+    c.strokeStyle=cssv("--accent"); c.lineWidth=2.2; c.stroke(); }
+}
+function drawAreaLabels(c,mv,o={}){
+  const A=areaGeo(), placed=[], sel=curSel(); const minPpd=S.lvl==="ward"?0:5200; if(mv.v.ppd<minPpd && !o.force) return;
+  c.textAlign="center"; c.textBaseline="middle"; c.lineJoin="round";
+  const halo=cssv("--map-halo"), ink=cssv("--map-label");
+  const order=[...A.keys()].sort((p,q)=>(sel.has(q)-sel.has(p))||(A[q].km2-A[p].km2));
+  for(const i of order){ const a=A[i]; const x=mv.px(a.lab[0]), y=mv.py(a.lab[1]); if(x<20||x>mv.W-20||y<14||y>mv.H-14) continue;
+    const t=a.name; c.font=`${sel.has(i)?700:600} ${S.lvl==="ward"?12:11}px ${cssv("--font")}`;
+    const tw=c.measureText(t).width; const box=[x-tw/2-4,y-9,x+tw/2+4,y+9];
+    if(placed.some(b=>!(box[2]<b[0]||box[0]>b[2]||box[3]<b[1]||box[1]>b[3]))) continue; placed.push(box);
+    c.strokeStyle=halo; c.lineWidth=3.5; c.strokeText(t,x,y); c.fillStyle=ink; c.fillText(t,x,y); }
+}
+
+/* ============================== collisions map ============================== */
+let bubbles=[], cMask=null;
+const BIN0=1/16384, BUB_MIN=10;
+const crashMap = new MapView($("crashMap"), { minPpd:900, maxPpd:6e5,
+  draw(c,mv){ drawBase(c,mv); drawAreaLines(c,mv); drawBubbles(c,mv); drawAreaLabels(c,mv); },
+  hover(x,y,e){ const b=hitBubble(x,y); if(!b){ hideTT(); crashMap.cv.style.cursor=""; return; } crashMap.cv.style.cursor="pointer";
+    const nm=DICT.loc[LOCS.name[b.top]]; let h=`<b>${esc(nm)}</b>`;
+    if(b.n===1){ h+=ttRow("Collisions",fmt(b.cn))+ttRow("Killed",fmt(b.k))+ttRow("Seriously injured",fmt(b.s)); }
+    else { h+=ttRow(`Bubble total (${b.n} locations)`,"")+ttRow("Collisions",fmt(b.cn))+ttRow("Killed",fmt(b.k))+ttRow("Seriously injured",fmt(b.s))+`<div class="sub2">Busiest location shown. Zoom in to split the bubble.</div>`; }
+    h+=`<div class="sub2">Click to list collisions</div>`; showTT(h,e); },
+  click(x,y){ const b=hitBubble(x,y); if(b){ S.pick={locs:b.locs, label: b.n===1? DICT.loc[LOCS.name[b.top]] : `${b.n} nearby locations around ${DICT.loc[LOCS.name[b.top]]}`}; renderDetail(); } },
+});
+function hitBubble(x,y){ let hit=null; for(const b of bubbles){ const dx=x-b.x, dy=y-b.y, r=Math.max(b.r,6); if(dx*dx+dy*dy<=r*r && (!hit||b.r<hit.r)) hit=b; } return hit; }
+function drawBubbles(c,mv){
+  bubbles=[]; if(!cMask) return;
+  const k=Math.max(0,Math.ceil(Math.log2(BUB_MIN/(BIN0*mv.v.ppd)))), bin=BIN0*Math.pow(2,k), binLo=bin/COSF;
+  const w=mv.win(), bins=new Map();
+  // per-location totals first
+  const lv=new Map();
+  for(let i=0;i<NC;i++){ if(!cMask[i]) continue; const L=C.loc[i]; if(L<0) continue; const [a,b]=split(i); const v=a+b; if(v<=0) continue;
+    let e=lv.get(L); if(!e){ e={v:0,k:0,s:0,cn:0}; lv.set(L,e); } e.v+=v; e.k+=C.K[i]; e.s+=C.S[i]; e.cn++; }
+  for(const [L,e] of lv){ const lat=locLat[L], lon=locLon[L]; if(lon<w[0]-binLo||lon>w[1]+binLo||lat<w[2]-bin||lat>w[3]+bin) continue;
+    const key=Math.floor(lat/bin)*1e7+Math.floor(lon/binLo); let b=bins.get(key);
+    if(!b){ b={v:0,k:0,s:0,cn:0,la:0,lo:0,n:0,topv:0,top:-1,locs:[]}; bins.set(key,b); }
+    b.v+=e.v; b.k+=e.k; b.s+=e.s; b.cn+=e.cn; b.la+=e.v*lat; b.lo+=e.v*lon; b.n++; b.locs.push(L); if(e.v>b.topv){ b.topv=e.v; b.top=L; } }
+  let bmax=0; for(const b of bins.values()) if(b.v>bmax) bmax=b.v;
+  const vals=[...bins.values()].map(b=>b.v).sort((a,b)=>a-b), ref=Math.max(1,vals[Math.floor((vals.length-1)*0.98)]||bmax);
+  const rmax=Math.min(Math.max(bin*mv.v.ppd*0.6,9),24), ramp=countRamp(), lmax=Math.log1p(bmax)||1;
+  bubbles=[...bins.values()].map(b=>{ const one=b.n===1, x=one?locLon[b.top]:b.lo/b.v, y=one?locLat[b.top]:b.la/b.v, t=Math.log1p(b.v)/lmax;
+    return {...b, x:mv.px(x), y:mv.py(y), r:Math.max(2.6, rmax*Math.min(1.4,Math.sqrt(b.v/ref))), col:ramp[Math.min(ramp.length-1,Math.floor(t*ramp.length*0.999))]}; }).sort((a,b)=>b.v-a.v);
+  c.lineWidth=1.2; c.strokeStyle=cssv("--map-halo");
+  for(const b of bubbles){ c.beginPath(); c.arc(b.x,b.y,b.r,0,Math.PI*2); c.globalAlpha=.85; c.fillStyle=b.col; c.fill(); c.globalAlpha=.9; c.stroke(); }
+  c.globalAlpha=1;
+  if(S.pick){ const ps=new Set(S.pick.locs); for(const b of bubbles) if(b.locs.some(l=>ps.has(l))){ c.beginPath(); c.arc(b.x,b.y,b.r+3,0,Math.PI*2); c.strokeStyle=cssv("--ink"); c.lineWidth=2; c.stroke(); } }
+  $("mRamp").innerHTML=ramp.map((col,i)=>{ const d=6+i*2.2; return `<i style="background:${col};width:${d}px;height:${d}px"></i>`; }).join("");
+  $("mRampMax").textContent=`More (${fmt(bmax)} ${MW[S.meas]} in one bubble)`;
+  const m=bin*111000; $("mNote").textContent= k===0? "Each bubble is one location" : `Bubbles merge locations within about ${m<1000?Math.round(m/10)*10+" m":(m/1000).toFixed(1)+" km"}`;
+}
+function selBBox(){ const sel=curSel(); if(!sel.size) return CITY_BB; let bb=[1e9,-1e9,1e9,-1e9]; for(const i of sel){ const b=areaGeo()[i].bb; bb=[Math.min(bb[0],b[0]),Math.max(bb[1],b[1]),Math.min(bb[2],b[2]),Math.max(bb[3],b[3])]; } return bb; }
+$("mZoomIn").onclick=()=>crashMap.zoomAt(crashMap.W/2,crashMap.H/2,1.6);
+$("mZoomOut").onclick=()=>crashMap.zoomAt(crashMap.W/2,crashMap.H/2,1/1.6);
+$("mReset").onclick=()=>{ crashMap.fit(selBBox()); crashMap.draw(); };
+function zoomToLoc(L){ crashMap.v={lon:locLon[L],lat:locLat[L],ppd:60000}; crashMap.touched=true; S.pick={locs:[L],label:DICT.loc[LOCS.name[L]]}; renderDetail(); crashMap.draw();
+  $("crashMap").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion:reduce)").matches?"auto":"smooth",block:"center"}); }
+
+function collisionRows(idx){
+  return idx.map(i=>{ const d=new Date(EPOCH+C.day[i]*864e5), hh=String(cHour[i]).padStart(2,"0"), mm=String(C.min[i]%60).padStart(2,"0");
+    const users=[]; const f=C.flags[i]; [["Pedestrian",0],["Cyclist",1],["Motorcyclist",2],["Micromobility",3],["Heavy truck",4]].forEach(([n,b])=>{ if(f&(1<<b)) users.push(n); });
+    return `<tr><td class="l">${fmtDate(d)} ${hh}:${mm}</td><td class="l">${esc(DICT.loc[LOCS.name[C.loc[i]]]||"")}</td><td class="l">${esc(DICT.impact[C.impact[i]])}</td><td class="l">${users.join(", ")||"–"}</td><td>${C.K[i]}</td><td>${C.S[i]}</td><td class="l">${esc(AREA_NAME.ward[C.ward[i]]||"")}</td><td class="l">${esc(AREA_NAME.nb[C.nb[i]]||"")}</td></tr>`; }).join(""); }
+const ROW_HEAD=`<thead><tr><th class="l">Date</th><th class="l">Location</th><th class="l">Collision type</th><th class="l">Involving</th><th>Killed</th><th>Seriously injured</th><th class="l">Ward</th><th class="l">Neighbourhood</th></tr></thead>`;
+function renderDetail(){
+  const el=$("mDetail"); if(!S.pick){ el.hidden=true; crashMap.draw(); return; }
+  const ls=new Set(S.pick.locs), idx=[]; for(let i=NC-1;i>=0;i--) if(cMask[i] && ls.has(C.loc[i])) idx.push(i);
+  let k=0,s=0; idx.forEach(i=>{k+=C.K[i]; s+=C.S[i];});
+  el.hidden=false;
+  el.innerHTML=`<div class="card-h"><div><h3>${esc(S.pick.label)}</h3><div class="meta">${fmt(idx.length)} collision${idx.length===1?"":"s"} in the current selection · ${fmt(k)} killed · ${fmt(s)} seriously injured</div></div><button type="button" class="linkbtn" id="mDetailClose">Close</button></div>
+    <div class="tscroll" style="max-height:300px">${idx.length?`<table>${ROW_HEAD}<tbody>${collisionRows(idx.slice(0,200))}</tbody></table>`:`<div class="empty">No collisions here match the current filters.</div>`}</div>`;
+  $("mDetailClose").onclick=()=>{ S.pick=null; renderDetail(); };
+  crashMap.draw();
+}
+
+/* ============================== SVG charts ============================== */
+function svgEl(t,a,parent){ const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); if(parent) parent.appendChild(e); return e; }
+function niceMax(v){ if(v<=0) return 1; const p=Math.pow(10,Math.floor(Math.log10(v))), n=v/p; return ([1,1.2,1.5,2,2.5,3,4,5,6,8,10].find(s=>n<=s+1e-9))*p; }
+function niceStep(v){ if(v<=0) return 1; const p=Math.pow(10,Math.floor(Math.log10(v))), n=v/p; return ([1,2,2.5,5,10].find(s=>n<=s+1e-9))*p; }
+function ticks(max,n=4){ const step=niceStep(max/n); const t=[]; for(let v=0;v<=max+1e-9;v+=step) t.push(v); return t; }
+
+// stacked columns by year (all years shown; range outside the filter is faded)
+function yearChart(el, rows){ // rows: [{y,a,b}]
+  el=$(el); el.innerHTML=""; const W=1080,H=250,ml=44,mr=8,mt=18,mb=28, iw=W-ml-mr, ih=H-mt-mb;
+  const svg=svgEl("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"By year"},el);
+  const max=niceMax(Math.max(1,...rows.map(r=>r.a+r.b))*1.08), tk=ticks(max);
+  tk.forEach(v=>{ const y=mt+ih-ih*v/max; svgEl("line",{x1:ml,x2:W-mr,y1:y,y2:y,class:v?"gridline":"baseline"},svg); const t=svgEl("text",{x:ml-8,y:y+4,"text-anchor":"end",class:"axis"},svg); t.textContent=fmt(v); });
+  const bw=iw/rows.length, cw=Math.min(24,bw*0.62), K=cssv("--killed"), Sv=cssv("--serious");
+  const peak=rows.reduce((m,r,i)=>(r.a+r.b)>(rows[m].a+rows[m].b)&&r.y>=S.y0&&r.y<=S.y1?i:m, rows.findIndex(r=>r.y>=S.y0));
+  rows.forEach((r,i)=>{ const x=ml+bw*i+(bw-cw)/2, inR=r.y>=S.y0&&r.y<=S.y1, g=svgEl("g",{opacity:inR?1:0.3},svg);
+    const ha=ih*r.a/max, hb=ih*r.b/max, y0=mt+ih;
+    const gap=(ha>0&&hb>0)?2:0;
+    if(ha>0) roundTop(g,x,y0-ha,cw,ha,hb>0?0:4,K);
+    if(hb>0) roundTop(g,x,y0-ha-hb,cw,hb-gap,4,Sv);
+    const lab=svgEl("text",{x:x+cw/2,y:H-10,"text-anchor":"middle",class:"axis"},svg); lab.textContent=(rows.length>14&&i%2&&i!==rows.length-1)?"":(r.y===YN&&YN===updDate.getUTCFullYear()?r.y+"*":r.y);
+    if(i===peak||i===rows.length-1){ const t=svgEl("text",{x:x+cw/2,y:y0-ha-hb-5,"text-anchor":"middle",class:"val-lbl"},g); t.textContent=fmt(r.a+r.b); }
+    const hit=svgEl("rect",{x:ml+bw*i,y:mt,width:bw,height:ih,fill:"transparent"},svg);
+    hit.addEventListener("mousemove",e=>{ const [pa,pb]=PARTS[S.meas]; let h=`<b>${r.y}${r.y===YN?` (to ${fmtDate(updDate).replace(/, \d+$/,"")})`:""}</b>`+ttRow(pa,fmt(r.a),K); if(pb) h+=ttRow(pb,fmt(r.b),Sv); h+=ttRow("Total",fmt(r.a+r.b)); if(!inR) h+=`<div class="sub2">Outside the selected years</div>`; showTT(h,e); });
+    hit.addEventListener("mouseleave",hideTT); });
+}
+function roundTop(g,x,y,w,h,r,fill){ r=Math.min(r,h,w/2); const d=`M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`; return svgEl("path",{d,fill},g); }
+
+function heatmap(el, m){
+  el=$(el); el.innerHTML=""; const grid=Array.from({length:7},()=>new Float64Array(24)), gk=Array.from({length:7},()=>new Float64Array(24));
+  for(let i=0;i<NC;i++){ if(!m[i]) continue; const [a,b]=split(i); grid[cDow[i]][cHour[i]]+=a+b; gk[cDow[i]][cHour[i]]+=a; }
+  let max=0,pk=[0,0]; grid.forEach((r,d)=>r.forEach((v,h)=>{ if(v>max){max=v;pk=[d,h];} }));
+  const W=1080, ml=40, mt=4, cw=(W-ml)/24, ch=24, H=mt+7*ch+22, ramp=["--r0","--r1","--r2","--r3","--r4","--r5","--r6","--r7"].map(cssv);
+  const svg=svgEl("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"Day of week by hour heatmap"},el);
+  for(let d=0;d<7;d++){ const t=svgEl("text",{x:ml-8,y:mt+d*ch+ch/2+4,"text-anchor":"end",class:"axis"},svg); t.textContent=DAYS[d].slice(0,3);
+    for(let h=0;h<24;h++){ const v=grid[d][h], ix=v<=0?0:1+Math.min(6,Math.floor(6.999*Math.sqrt(v/max)));
+      const r=svgEl("rect",{x:ml+h*cw+1,y:mt+d*ch+1,width:cw-2,height:ch-2,rx:3,fill:ramp[ix]},svg);
+      if(d===pk[0]&&h===pk[1]&&max>0){ r.setAttribute("stroke",cssv("--ink")); r.setAttribute("stroke-width","2"); }
+      r.addEventListener("mousemove",e=>{ const [pa,pb]=PARTS[S.meas]; let s=`<b>${DAYS[d]}, ${String(h).padStart(2,"0")}:00–${String(h).padStart(2,"0")}:59</b>`+ttRow(MW[S.meas][0].toUpperCase()+MW[S.meas].slice(1),fmt(v)); if(pb) s+=ttRow(pa,fmt(gk[d][h])); showTT(s,e); });
+      r.addEventListener("mouseleave",hideTT); } }
+  for(let h=0;h<24;h+=3){ const t=svgEl("text",{x:ml+h*cw+cw/2,y:H-6,"text-anchor":"middle",class:"axis"},svg); t.textContent=h===0?"midnight":h===12?"noon":(h<12?h+" am":(h-12)+" pm"); }
+  const sc=document.createElement("div"); sc.className="hm-scale";
+  sc.innerHTML=`<span>0</span><span class="map-steps">${ramp.map(c=>`<i style="background:${c}"></i>`).join("")}</span><span>${fmt(max)} ${MW[S.meas]} in one hour slot</span><span class="map-note" style="margin-left:auto">Busiest: ${DAYS[pk[0]]} ${String(pk[1]).padStart(2,"0")}:00</span>`;
+  el.appendChild(sc);
+}
+
+// multi-series line chart by year with direct end labels
+function lineChart(el, series, legEl){
+  el=$(el); el.innerHTML=""; const W=1080,H=290,ml=44,mr=150,mt=14,mb=28, iw=W-ml-mr, ih=H-mt-mb;
+  const svg=svgEl("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"People KSI by year and road user"},el);
+  const max=niceMax(Math.max(1,...series.flatMap(s=>s.v))*1.05), tk=ticks(max);
+  const x=i=>ml+iw*i/(YEARS.length-1), y=v=>mt+ih-ih*v/max;
+  const i0=YEARS.indexOf(S.y0), i1=YEARS.indexOf(S.y1);
+  svgEl("rect",{x:x(i0)-(i0===i1?6:0),y:mt,width:Math.max(12,x(i1)-x(i0)),height:ih,fill:cssv("--accent-soft"),opacity:.6},svg);
+  tk.forEach(v=>{ svgEl("line",{x1:ml,x2:ml+iw,y1:y(v),y2:y(v),class:v?"gridline":"baseline"},svg); const t=svgEl("text",{x:ml-8,y:y(v)+4,"text-anchor":"end",class:"axis"},svg); t.textContent=fmt(v); });
+  YEARS.forEach((yr,i)=>{ if(i%2&&i!==YEARS.length-1) return; const t=svgEl("text",{x:x(i),y:H-8,"text-anchor":"middle",class:"axis"},svg); t.textContent=yr===updDate.getUTCFullYear()?yr+"*":yr; });
+  const ends=[];
+  series.forEach(s=>{ const col=cssv(s.c); svgEl("path",{d:s.v.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+","+y(v).toFixed(1)).join(""),fill:"none",stroke:col,"stroke-width":2,"stroke-linejoin":"round","stroke-linecap":"round"},svg);
+    const li=s.v.length-1; svgEl("circle",{cx:x(li),cy:y(s.v[li]),r:4,fill:col,stroke:cssv("--surface"),"stroke-width":2},svg); ends.push({y:y(s.v[li]),s}); });
+  // end labels with simple de-collision and leaders
+  ends.sort((a,b)=>a.y-b.y); const ly=[]; ends.forEach((e,i)=>{ let v=e.y; if(i&&v<ly[i-1]+14) v=ly[i-1]+14; ly.push(v); });
+  for(let i=ly.length-1;i>=0;i--){ if(ly[i]>mt+ih){ ly[i]=mt+ih; } if(i<ly.length-1&&ly[i]>ly[i+1]-14) ly[i]=ly[i+1]-14; }
+  ends.forEach((e,i)=>{ const xe=x(YEARS.length-1); if(Math.abs(ly[i]-e.y)>2) svgEl("line",{x1:xe+6,y1:e.y,x2:xe+14,y2:ly[i],stroke:cssv("--base")},svg);
+    const t=svgEl("text",{x:xe+18,y:ly[i]+4,class:"end-lbl"},svg); t.textContent=`${e.s.n} ${fmt(e.s.v[e.s.v.length-1])}`; });
+  const cross=svgEl("line",{x1:0,x2:0,y1:mt,y2:mt+ih,stroke:cssv("--base"),opacity:0},svg);
+  const hit=svgEl("rect",{x:ml,y:mt,width:iw,height:ih,fill:"transparent"},svg);
+  hit.addEventListener("mousemove",e=>{ const r=svg.getBoundingClientRect(), sx=(e.clientX-r.left)/r.width*W; const i=Math.max(0,Math.min(YEARS.length-1,Math.round((sx-ml)/iw*(YEARS.length-1))));
+    cross.setAttribute("x1",x(i)); cross.setAttribute("x2",x(i)); cross.setAttribute("opacity",1);
+    showTT(`<b>${YEARS[i]}${YEARS[i]===updDate.getUTCFullYear()?" (partial)":""}</b>`+series.map(s=>ttRow(s.n,fmt(s.v[i]),cssv(s.c))).join(""),e); });
+  hit.addEventListener("mouseleave",()=>{ cross.setAttribute("opacity",0); hideTT(); });
+  if(legEl) $(legEl).innerHTML=series.map(s=>`<span><i class="ln" style="background:${cssv(s.c)}"></i>${esc(s.n)}</span>`).join("");
+}
+
+/* ============================== render: collisions ============================== */
+function kpiHTML(list){ return list.map(k=>`<div class="kpi${k.lead?" lead":""}"><div class="k-label">${k.l}</div><div class="k-val${k.big?" k-big":""}">${k.v}</div><div class="k-delta">${k.d||""}</div></div>`).join(""); }
+function renderCollisions(){
+  const m=mask(); cMask=m;
+  let nc=0,K=0,Sx=0,fat=0; for(let i=0;i<NC;i++) if(m[i]){ nc++; K+=C.K[i]; Sx+=C.S[i]; fat+=C.fatal[i]; }
+  const years=S.y1-S.y0+1, partial=S.y1===YN;
+  const yrsFull = years - (partial? 1-((Date.UTC(YN,updDate.getUTCMonth(),updDate.getUTCDate())-Date.UTC(YN,0,1))/864e5+1)/365 : 0);
+  $("c_kpis").innerHTML=kpiHTML([
+    {l:"People killed or seriously injured",v:fmt(K+Sx),d:`about ${fmt((K+Sx)/yrsFull)} a year, ${yrsLabel()}`,lead:true},
+    {l:"People killed",v:fmt(K),d:`${pctS(K,K+Sx)} of people KSI`},
+    {l:"Seriously injured",v:fmt(Sx),d:"major injury, admitted to hospital"},
+    {l:"Collisions",v:fmt(nc),d:`${fmt(fat)} fatal · ${fmt(nc-fat)} with serious injury`} ]);
+  // map
+  const geoKey=S.lvl+"|"+[...curSel()].join(",");
+  if(geoKey!==renderCollisions.geoKey){ renderCollisions.geoKey=geoKey; crashMap.fit(selBBox()); }
+  if(S.pick) renderDetail(); else crashMap.draw();
+  $("mapTitle").textContent=`Where ${MW[S.meas]==="collisions"?"collisions happen":MW[S.meas].replace("people ","people are ").replace("KSI","killed or seriously injured")}`;
+  // locations
+  const lv=new Map(); for(let i=0;i<NC;i++){ if(!m[i]||C.loc[i]<0) continue; const [a,b]=split(i); if(a+b<=0) continue; let e=lv.get(C.loc[i]); if(!e){e={a:0,b:0};lv.set(C.loc[i],e);} e.a+=a; e.b+=b; }
+  const locItems=[...lv].map(([L,e])=>({label:DICT.loc[LOCS.name[L]],a:e.a,b:e.b,L})).sort((p,q)=>(q.a+q.b)-(p.a+p.b)||q.a-p.a).slice(0,12);
+  locItems.forEach(it=>it.onClick=()=>zoomToLoc(it.L));
+  bars("c_locs",locItems,{wide:true,noPct:true});
+  // streets
+  const sv=new Map(); for(let i=0;i<NC;i++){ if(!m[i]) continue; const [a,b]=split(i); if(a+b<=0) continue; for(const s of [C.st1[i],C.st2[i]]){ if(s<0) continue; let e=sv.get(s); if(!e){e={a:0,b:0};sv.set(s,e);} e.a+=a; e.b+=b; } }
+  bars("c_streets",[...sv].map(([s,e])=>({label:DICT.street[s],a:e.a,b:e.b})).sort((p,q)=>(q.a+q.b)-(p.a+p.b)).slice(0,12),{noPct:true});
+  // year (ignores year range, shows it faded)
+  const mAll=mask({allYears:true}); const yr=YEARS.map(y=>({y,a:0,b:0}));
+  for(let i=0;i<NC;i++){ if(!mAll[i]) continue; const [a,b]=split(i); const r=yr[cYear[i]-Y0]; r.a+=a; r.b+=b; }
+  yearChart("c_year",yr);
+  const [pa,pb]=PARTS[S.meas];
+  $("c_yearLeg").innerHTML=`<span><i style="background:var(--killed)"></i>${pa}</span>`+(pb?`<span><i style="background:var(--serious)"></i>${pb}</span>`:"");
+  $("c_yearNote").textContent=`All years for the current area and filter; years outside ${yrsLabel()} are faded. *${partialNote}.`;
+  $("legInline").innerHTML= pb? `<i class="sw2" style="background:var(--killed)"></i>${pa.toLowerCase()} and <i class="sw2" style="background:var(--serious)"></i>${pb.toLowerCase()}. Hover a bar for the split.` : "people killed.";
+  heatmap("c_heat",m);
+  const tot=measTotal(m), T=tot[0]+tot[1];
+  bars("c_impact",byCode(m,C.impact,DICT.impact,{last:["Other","Not recorded"],dropZero:true}),{total:T});
+  const fac=[["Speeding",10],["Aggressive driving",7],["Distracted driving",8],["Alcohol or drugs",11],["Red-light running",9]].map(([l,b])=>{ let a=0,bb=0; for(let i=0;i<NC;i++) if(m[i]&&(C.flags[i]&(1<<b))){ const [x,y]=split(i); a+=x; bb+=y; } return {label:l,a,b:bb}; }).sort((p,q)=>(q.a+q.b)-(p.a+p.b));
+  bars("c_factors",fac,{total:T});
+  bars("c_accloc",byCode(m,C.accloc,DICT.accloc,{last:["Other","Not recorded"],dropZero:true}),{total:T});
+  bars("c_ctl",byCode(m,C.ctl,DICT.ctl,{last:["Other","Not recorded"],dropZero:true}),{total:T});
+  bars("c_road",byCode(m,C.road,DICT.road,{order:["Expressway","Major arterial","Minor arterial","Collector","Local","Other","Not recorded"],dropZero:true}),{total:T});
+  const mon=byCode(m,cMon,MONTHS_L,{order:MONTHS_L}); bars("c_month",mon,{total:T});
+  $("c_monthNote").textContent=`Busiest month: ${mon.reduce((a,b)=>(b.a+b.b)>(a.a+a.b)?b:a).label}`+(partial?`. ${partialNote}, so later months are slightly undercounted.`:"");
+  bars("c_light",byCode(m,C.light,DICT.light,{order:["Daylight","Dawn or dusk","Dark, street-lit","Dark, unlit","Other","Not recorded"],dropZero:true}),{total:T});
+  bars("c_surface",byCode(m,C.surface,DICT.surface,{order:["Dry","Wet","Snow, slush or ice","Other","Not recorded"],dropZero:true}),{total:T});
+  // table (lazy)
+  $("c_tableSum").textContent=`Show collision list (${fmt(nc)} in the current selection${nc>1000?", newest 1,000 shown":""})`;
+  if($("c_tableWrap").open) fillCollisionTable();
+}
+function fillCollisionTable(){ const idx=[]; for(let i=NC-1;i>=0&&idx.length<1000;i--) if(cMask[i]) idx.push(i); $("c_table").innerHTML=ROW_HEAD+`<tbody>${collisionRows(idx)}</tbody>`; }
+$("c_tableWrap").addEventListener("toggle",()=>{ if($("c_tableWrap").open) fillCollisionTable(); });
+
+/* ============================== render: people ============================== */
+function renderPeople(){
+  const m=mask(), mAll=mask({allYears:true});
+  const isKSI=j=>P.inj[j]===INJ_FATAL||P.inj[j]===INJ_MAJOR;
+  const ru=RU.map(l=>({label:l,a:0,b:0})), age=AGE.map(l=>({label:l,a:0,b:0})), ageU={label:"Age not recorded",a:0,b:0};
+  let K=0,Sx=0,pedK=0, old=0, pedKSI=0, oldPed=0;
+  const vehKey=new Set(), veh=DICT.veh.map(l=>({label:l,a:0,b:0}));
+  const da=DICT.drivact.map(l=>({label:l,a:0,b:0})), dc=DICT.drivcond.map(l=>({label:l,a:0,b:0}));
+  const pt=DICT.pedtype.map(l=>({label:l,a:0,b:0})), pa=DICT.pedact.map(l=>({label:l,a:0,b:0})), ct=DICT.cyctype.map(l=>({label:l,a:0,b:0}));
+  let drivers=0, cycKSI=0;
+  for(let i=0;i<NC;i++){ if(!m[i]) continue;
+    for(let j=pStart[i];j<pStart[i+1];j++){
+      const f=P.inj[j]===INJ_FATAL, s=P.inj[j]===INJ_MAJOR, r=P.ru[j];
+      if(P.veh[j]>=0 && P.vno[j]>=0){ const key=i*64+P.vno[j]; if(!vehKey.has(key)){ vehKey.add(key); veh[P.veh[j]].a+=0; veh[P.veh[j]].b+=1; } }
+      if(r===RU_DRIVER){ drivers++; if(P.da[j]>=0) da[P.da[j]].b++; if(P.dc[j]>=0) dc[P.dc[j]].b++; }
+      if(!(f||s)) continue;
+      const fa=f?1:0, sa=s?1:0; K+=fa; Sx+=sa;
+      ru[r].a+=fa; ru[r].b+=sa;
+      const ab=P.age[j]; if(ab>=0){ age[ab].a+=fa; age[ab].b+=sa; if(ab>=6) old++; } else { ageU.a+=fa; ageU.b+=sa; }
+      if(r===RU_PED){ pedKSI++; if(f) pedK++; if(ab>=6) oldPed++; if(P.pt[j]>=0){ pt[P.pt[j]].a+=fa; pt[P.pt[j]].b+=sa; } if(P.pa[j]>=0){ pa[P.pa[j]].a+=fa; pa[P.pa[j]].b+=sa; } }
+      if(r===RU_CYC){ cycKSI++; if(P.ct[j]>=0){ ct[P.ct[j]].a+=fa; ct[P.ct[j]].b+=sa; } }
+    } }
+  $("p_kpis").innerHTML=kpiHTML([
+    {l:"People killed or seriously injured",v:fmt(K+Sx),d:yrsLabel(),lead:true},
+    {l:"Pedestrians among people killed",v:pctS(pedK,K),d:`${fmt(pedK)} of ${fmt(K)} people killed`},
+    {l:"Pedestrians and cyclists",v:pctS(pedKSI+cycKSI,K+Sx),d:"share of people KSI"},
+    {l:"Aged 65 or older",v:pctS(old,K+Sx-ageU.a-ageU.b),d:`of people KSI with a recorded age; ${pctS(oldPed,pedKSI)} of pedestrians`} ]);
+  const parts=["Killed","Seriously injured"], T=K+Sx;
+  bars("p_ru",ru.filter(x=>x.a+x.b>0).sort((p,q)=>(q.a+q.b)-(p.a+p.b)),{parts,total:T});
+  bars("p_age",[...age,...(ageU.a+ageU.b?[ageU]:[])],{parts,total:T});
+  $("p_ageNote").textContent="People KSI by age group";
+  // line by year x road user (ignores year range; shades it)
+  const groups=[["Pedestrian",[RU_PED],"--l1"],["Driver or passenger",[RU_DRIVER,RU.indexOf("Passenger")],"--l2"],["Cyclist",[RU_CYC],"--l3"],["Motorcyclist",[RU.indexOf("Motorcyclist")],"--l4"],["Other",[RU.indexOf("E-scooter / other micromobility"),RU.indexOf("Other")],"--l5"]];
+  const series=groups.map(([n,ids,c])=>({n,ids:new Set(ids),c,v:YEARS.map(()=>0)}));
+  for(let i=0;i<NC;i++){ if(!mAll[i]) continue; for(let j=pStart[i];j<pStart[i+1];j++){ if(P.inj[j]!==INJ_FATAL&&P.inj[j]!==INJ_MAJOR) continue; const s=series.find(s=>s.ids.has(P.ru[j])); if(s) s.v[cYear[i]-Y0]++; } }
+  lineChart("p_line",series,"p_lineLeg");
+  $("p_table").innerHTML=`<thead><tr><th>Year</th>${series.map(s=>`<th>${esc(s.n)}</th>`).join("")}<th>Total</th></tr></thead><tbody>${YEARS.map((y,i)=>`<tr><td>${y}${y===updDate.getUTCFullYear()?" (partial)":""}</td>${series.map(s=>`<td>${fmt(s.v[i])}</td>`).join("")}<td>${fmt(series.reduce((a,s)=>a+s.v[i],0))}</td></tr>`).join("")}</tbody>`;
+  const one=["Vehicles",null];
+  const vehT=veh.reduce((s,x)=>s+x.b,0);
+  bars("p_veh",veh.filter(x=>x.b>0).sort((p,q)=>q.b-p.b),{parts:one,total:vehT,last:null});
+  const daI=da.filter(x=>x.b>0&&x.label!=="Unknown").sort((p,q)=>q.b-p.b); const daT=daI.reduce((s,x)=>s+x.b,0);
+  bars("p_da",daI.slice(0,10),{parts:["Drivers",null],total:daT,wide:false});
+  const dcI=dc.filter(x=>x.b>0).sort((p,q)=>q.b-p.b); bars("p_dc",dcI,{parts:["Drivers",null],total:dcI.reduce((s,x)=>s+x.b,0)});
+  // manoeuvre: derive from persons (drivers)
+  renderManoeuvre(m);
+  const ptI=pt.filter(x=>x.a+x.b>0).sort((p,q)=>(q.a+q.b)-(p.a+p.b)); bars("p_pt",ptI.slice(0,9),{parts,total:ptI.reduce((s,x)=>s+x.a+x.b,0),wide:true,empty:"No pedestrians were killed or seriously injured in this selection."});
+  $("p_ptNote").textContent=`${fmt(pedKSI)} pedestrians KSI. Police-coded collision scenario.`;
+  const paI=pa.filter(x=>x.a+x.b>0).sort((p,q)=>(q.a+q.b)-(p.a+p.b)); bars("p_pa",paI.slice(0,9),{parts,total:paI.reduce((s,x)=>s+x.a+x.b,0),wide:true,empty:"No pedestrians were killed or seriously injured in this selection."});
+  const ctI=ct.filter(x=>x.a+x.b>0).sort((p,q)=>(q.a+q.b)-(p.a+p.b)); bars("p_ct",ctI.slice(0,10),{parts,total:ctI.reduce((s,x)=>s+x.a+x.b,0),wide:true,empty:"No cyclists were killed or seriously injured in this selection."});
+  $("p_ctNote").textContent=`${fmt(cycKSI)} cyclists KSI. Police-coded collision scenario; cyclist coding is sparse before 2010.`;
+}
+function renderManoeuvre(m){
+  const MV=DICT.manoeuvre||[]; const el=$("p_mv"); if(!P.mv){ el.closest(".card").hidden=true; return; }
+  const a=MV.map(l=>({label:l,a:0,b:0}));
+  for(let i=0;i<NC;i++){ if(!m[i]) continue; for(let j=pStart[i];j<pStart[i+1];j++) if(P.ru[j]===RU_DRIVER && P.mv[j]>=0) a[P.mv[j]].b++; }
+  const it=a.filter(x=>x.b>0&&x.label!=="Unknown").sort((p,q)=>q.b-p.b); bars(el,it.slice(0,10),{parts:["Drivers",null],total:it.reduce((s,x)=>s+x.b,0)});
+}
+
+/* ============================== render: areas ============================== */
+let areaVals=null, hoverArea=-1;
+const choro = new MapView($("choroMap"), { minPpd:900, maxPpd:2e5,
+  draw(c,mv){ drawBase(c,mv,{landOnly:true}); drawChoro(c,mv); },
+  hover(x,y,e){ const i=areaAt(x,y); if(i!==hoverArea){ hoverArea=i; choro.draw(); } if(i<0){ hideTT(); choro.cv.style.cursor=""; return; } choro.cv.style.cursor="pointer";
+    const v=areaVals.rows[i]; showTT(`<b>${esc(AREA_NAME[S.lvl][i])}</b>`+ttRow(MW[S.meas][0].toUpperCase()+MW[S.meas].slice(1),fmt(v.v))+ttRow("Per km²",(v.v/v.km2).toFixed(1))+ttRow("Killed",fmt(v.k))+ttRow("Seriously injured",fmt(v.s))+`<div class="sub2">${curSel().has(i)?"Click to remove from selection":"Click to add to selection"}</div>`,e); },
+  leave(){ if(hoverArea>=0){ hoverArea=-1; choro.draw(); } },
+  click(x,y){ const i=areaAt(x,y); if(i>=0) toggleArea(i); },
+});
+function pip(x,y,ring){ let ins=false; for(let i=0,j=ring.length-2;i<ring.length;j=i,i+=2){ const xi=ring[i],yi=ring[i+1],xj=ring[j],yj=ring[j+1]; if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) ins=!ins; } return ins; }
+function areaAt(x,y){ const lon=choro.ilon(x), lat=choro.ilat(y), A=areaGeo();
+  for(let i=0;i<A.length;i++){ const b=A[i].bb; if(lon<b[0]||lon>b[1]||lat<b[2]||lat>b[3]) continue; let ins=false; for(const r of A[i].rings) if(pip(lon,lat,r)) ins=!ins; if(ins) return i; } return -1; }
+function choroBreaks(vals){ const s=vals.filter(v=>v>0).sort((a,b)=>a-b); if(!s.length) return [0]; const br=[]; for(let k=1;k<7;k++) br.push(s[Math.min(s.length-1,Math.floor(s.length*k/7))]); return br; }
+function classOf(v,br){ if(v<=0) return -1; let k=0; while(k<br.length&&v>br[k]) k++; return k; }
+function drawChoro(c,mv){
+  if(!areaVals) return; const A=areaGeo(), w=mv.win(), ramp=countRamp(), sel=curSel();
+  A.forEach((a,i)=>{ if(!hitBB(a.bb,w)) return; const v=areaVals.norm[i], k=classOf(v,areaVals.br);
+    c.beginPath(); for(const r of a.rings){ c.moveTo(mv.px(r[0]),mv.py(r[1])); for(let q=2;q<r.length;q+=2) c.lineTo(mv.px(r[q]),mv.py(r[q+1])); c.closePath(); }
+    c.fillStyle=k<0?cssv("--map-land"):ramp[k]; c.fill("evenodd"); c.strokeStyle=cssv("--surface"); c.lineWidth=S.lvl==="ward"?1.4:0.8; c.stroke(); });
+  c.lineJoin="round"; c.beginPath(); if(traceLines(c,mv,GEO.roads.expressway,w)){ c.strokeStyle=cssv("--map-halo"); c.globalAlpha=.55; c.lineWidth=1; c.stroke(); c.globalAlpha=1; }
+  const outline=(i,col,lw)=>{ c.beginPath(); for(const r of A[i].rings){ c.moveTo(mv.px(r[0]),mv.py(r[1])); for(let q=2;q<r.length;q+=2) c.lineTo(mv.px(r[q]),mv.py(r[q+1])); c.closePath(); } c.strokeStyle=col; c.lineWidth=lw; c.stroke(); };
+  for(const i of sel){ outline(i,cssv("--map-halo"),5); outline(i,cssv("--ink"),2.2); }
+  if(hoverArea>=0) outline(hoverArea,cssv("--accent"),2.4);
+  if(S.lvl==="ward") drawAreaLabels(c,mv,{force:true});
+}
+function renderAreas(){
+  const m=mask({allAreas:true}), A=areaGeo(), n=A.length, sel=curSel();
+  const rows=A.map((a,i)=>({i,name:AREA_NAME[S.lvl][i],v:0,k:0,s:0,c:0,fat:0,km2:a.km2,recent:0,prior:0}));
+  for(let i=0;i<NC;i++){ if(!m[i]) continue; const ai=S.lvl==="ward"?C.ward[i]:C.nb[i]; if(ai<0) continue; const r=rows[ai]; const [x,y]=split(i); r.v+=x+y; r.k+=C.K[i]; r.s+=C.S[i]; r.c++; r.fat+=C.fatal[i]; }
+  // trend: last 5 full years vs the 5 before, independent of year range
+  const lastFull=updDate.getUTCFullYear()-1, mt=mask({allYears:true,allAreas:true});
+  for(let i=0;i<NC;i++){ if(!mt[i]) continue; const ai=S.lvl==="ward"?C.ward[i]:C.nb[i]; if(ai<0) continue; const [x,y]=split(i), yv=cYear[i];
+    if(yv>lastFull-5&&yv<=lastFull) rows[ai].recent+=x+y; else if(yv>lastFull-10&&yv<=lastFull-5) rows[ai].prior+=x+y; }
+  const norm=rows.map(r=>S.norm==="km2"?r.v/r.km2:r.v);
+  areaVals={rows,norm,br:choroBreaks(norm)};
+  const ramp=countRamp(), br=areaVals.br, f=v=>S.norm==="km2"?v.toFixed(1):fmt(v);
+  $("a_steps").innerHTML=ramp.map(col=>`<i style="background:${col}"></i>`).join("");
+  $("a_legLo").textContent=`Lower`; $("a_legHi").textContent=`Higher (top 1/7 above ${f(br[br.length-1])})`;
+  $("a_legNote").textContent=`Each colour holds about a seventh of the ${S.lvl==="ward"?"wards":"neighbourhoods"}. ${S.norm==="km2"?MW[S.meas]+" per km² of land":MW[S.meas]}, ${yrsLabel()}`;
+  $("a_mapTitle").textContent=`${MW[S.meas][0].toUpperCase()+MW[S.meas].slice(1)} by ${S.lvl==="ward"?"ward":"neighbourhood"}`;
+  if(!choro.v || renderAreas.lvl!==S.lvl){ renderAreas.lvl=S.lvl; choro.fit(CITY_BB,0.95); }
+  choro.draw();
+  // KPIs
+  const tot=rows.reduce((s,r)=>s+r.v,0), sorted=[...rows].sort((a,b)=>b.v-a.v), dens=[...rows].sort((a,b)=>b.v/b.km2-a.v/a.km2);
+  const top5=sorted.slice(0,Math.max(1,Math.round(n*0.1))).reduce((s,r)=>s+r.v,0);
+  $("a_kpis").innerHTML=kpiHTML([
+    {l:`Highest total`,v:esc(sorted[0].name),big:true,d:`${fmt(sorted[0].v)} ${MW[S.meas]}, ${yrsLabel()}`,lead:true},
+    {l:`Highest per km²`,v:esc(dens[0].name),big:true,d:`${(dens[0].v/dens[0].km2).toFixed(1)} ${MW[S.meas]} per km²`},
+    {l:`Top ${Math.max(1,Math.round(n*0.1))} ${S.lvl==="ward"?"wards":"neighbourhoods"}`,v:pctS(top5,tot),d:`of all ${MW[S.meas]} in the city`},
+    {l:`City total`,v:fmt(tot),d:`${MW[S.meas]}${S.inv>=0?", involving "+invLabel():""}`} ]);
+  // table
+  const sk=S.sort.key, dir=S.sort.dir;
+  const val=(r)=> sk==="name"?r.name : sk==="km2"?r.v/r.km2 : sk==="trend"? (r.prior? r.recent/r.prior : (r.recent?99:0)) : r[sk];
+  const list=[...rows].sort((a,b)=>{ const x=val(a),y=val(b); return typeof x==="string"? dir*x.localeCompare(y) : dir*(x-y); });
+  const rank=new Map(sorted.map((r,ix)=>[r.i,ix+1]));
+  const th=(k,l,cls="")=>`<th class="sort ${cls}" data-k="${k}" aria-sort="${sk===k?(dir<0?"descending":"ascending"):"none"}" tabindex="0">${l}</th>`;
+  $("a_table").innerHTML=`<thead><tr><th>#</th>${th("name",S.lvl==="ward"?"Ward":"Neighbourhood","l")}${th("v",MW[S.meas])}${th("k","Killed")}${th("s","Seriously injured")}${th("c","Collisions")}${th("km2","Per km²")}${th("trend",`${lastFull-4}–${lastFull} vs ${lastFull-9}–${lastFull-5}`)}</tr></thead><tbody>`+
+    list.map(r=>{ const ch=r.prior? (r.recent/r.prior-1)*100 : null; const cls=ch==null?"":ch>0?"delta-up":ch<0?"delta-dn":"";
+      return `<tr class="pick${sel.has(r.i)?" on":""}" data-i="${r.i}" tabindex="0"><td>${rank.get(r.i)}</td><td class="l">${esc(r.name)}</td><td>${fmt(r.v)}</td><td>${fmt(r.k)}</td><td>${fmt(r.s)}</td><td>${fmt(r.c)}</td><td>${(r.v/r.km2).toFixed(1)}</td><td class="${cls}">${ch==null?(r.recent?"new":"–"):(ch>0?"+":"")+Math.round(ch)+"%"}</td></tr>`; }).join("")+"</tbody>";
+  $("a_tblTitle").textContent=`${S.lvl==="ward"?"Wards":"Neighbourhoods"} ranked`;
+  $("a_tblNote").textContent=`${MW[S.meas][0].toUpperCase()+MW[S.meas].slice(1)}, ${yrsLabel()}${S.inv>=0?", collisions involving "+invLabel():""}. The last column compares the two most recent five-year periods and ignores the year filter. Red means more. Click a row to select it.`;
+  $("a_table").querySelectorAll("th.sort").forEach(h=>{ const go=()=>{ const k=h.dataset.k; S.sort= S.sort.key===k? {key:k,dir:-S.sort.dir} : {key:k,dir:k==="name"?1:-1}; renderAreas(); }; h.onclick=go; h.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } }; });
+  $("a_table").querySelectorAll("tr.pick").forEach(tr=>{ const go=()=>toggleArea(+tr.dataset.i); tr.onclick=go; tr.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } }; });
+}
+$("aZoomIn").onclick=()=>choro.zoomAt(choro.W/2,choro.H/2,1.6);
+$("aZoomOut").onclick=()=>choro.zoomAt(choro.W/2,choro.H/2,1/1.6);
+$("aReset").onclick=()=>{ choro.fit(CITY_BB,0.95); choro.draw(); };
+
+/* ============================== about ============================== */
+function renderAbout(){
+  const nPeople=NP; let K=0,Sx=0; for(let i=0;i<NC;i++){ K+=C.K[i]; Sx+=C.S[i]; }
+  $("aboutBody").innerHTML=`
+  <h2 style="margin-top:22px">What this shows</h2>
+  <p>Every collision on a City of Toronto road where at least one person was killed or seriously injured (KSI), as reported by the Toronto Police Service, from ${fmtDate(new Date(DATA.meta.first+"T00:00:00Z"))} to ${fmtDate(updDate)}. That is ${fmt(NC)} collisions involving ${fmt(nPeople)} people, of whom ${fmt(K)} were killed and ${fmt(Sx)} seriously injured.</p>
+  <h2>Terms</h2>
+  <dl>
+    <dt>KSI</dt><dd>Killed or seriously injured. The police record of injury for each person is Fatal, Major, Minor, Minimal or None. This site counts Fatal as killed and Major as seriously injured, the definition the City uses for Vision Zero.</dd>
+    <dt>People KSI</dt><dd>The number of people killed plus the number seriously injured.</dd>
+    <dt>Collisions</dt><dd>Distinct collision events. A collision is fatal when anyone involved died of their injuries.</dd>
+    <dt>Collisions involving</dt><dd>Filters to collisions where the police record shows that road user or factor anywhere in the collision. A pedestrian-involved collision still counts its drivers and passengers. Older adult and school-age child are flags set by the City in the dataset. Speeding and alcohol or drugs are derived from driver action and driver or pedestrian condition.</dd>
+    <dt>Geography</dt><dd>The ward and neighbourhood recorded in the dataset: the 25-ward model and the 158 social development neighbourhoods. Areas per km² use land area from the City's boundary files.</dd>
+  </dl>
+  <h2>Caveats</h2>
+  <p>This is police-reported data and some collisions, especially those involving only cyclists or pedestrians, are never reported. The ${YN} figures are partial: ${partialNote}. Collision locations are placed at the nearest intersection or address, so nearby collisions often share a point. Fields such as driver action and pedestrian action are police judgements at the scene and may be blank. ${fmt(C.loc.filter(l=>l<0).length)} collision${C.loc.filter(l=>l<0).length===1?" has":"s have"} no coordinates and appear in the charts but not on the map.</p>
+  <h2>Sources</h2>
+  <p>City of Toronto Open Data, published under the <a href="https://open.toronto.ca/open-data-license/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>:</p>
+  <ul>
+    <li><a href="https://open.toronto.ca/dataset/motor-vehicle-collisions-involving-killed-or-seriously-injured-persons/" target="_blank" rel="noopener">Motor Vehicle Collisions involving Killed or Seriously Injured Persons</a> (Transportation Services, from Toronto Police Service records; refreshed daily, extract taken ${DATA.meta.refreshed})</li>
+    <li><a href="https://open.toronto.ca/dataset/neighbourhoods/" target="_blank" rel="noopener">Neighbourhoods</a> and <a href="https://open.toronto.ca/dataset/city-wards/" target="_blank" rel="noopener">City Wards</a> boundaries</li>
+    <li><a href="https://open.toronto.ca/dataset/toronto-centreline-tcl/" target="_blank" rel="noopener">Toronto Centreline</a> for the street basemap</li>
+  </ul>
+  <p>Layout adapted from the <a href="https://licker-geospatial-consulting.github.io/ICBC-Playground/" target="_blank" rel="noopener">BC Road Data Explorer</a>. This is an independent analysis and is not produced or endorsed by the City of Toronto or the Toronto Police Service. The Lake Ontario outline beyond the city limits is approximate.</p>`;
+}
+const FOOT=()=>`<div><span class="hl">Source:</span> City of Toronto Open Data, Motor Vehicle Collisions involving Killed or Seriously Injured Persons (Toronto Police Service), ${Y0}–${YN}. ${partialNote}. Contains information licensed under the <a href="https://open.toronto.ca/open-data-license/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>.</div><div style="margin-top:6px"><span class="hl">This view:</span> ${esc(selLabel())} · ${yrsLabel()}${S.inv>=0?" · collisions involving "+esc(invLabel()):""} · counting ${MW[S.meas]}. KSI means killed (fatal injury) or seriously injured (major injury). Street basemap from the Toronto Centreline.</div>`;
+
+/* ============================== header, filters, tabs ============================== */
+const HEAD={
+  collisions:["Toronto Police Service KSI collisions","Where & when people are killed or seriously injured","Every collision on Toronto streets where someone was killed or seriously injured, by location, time and circumstance. Pick an area, a year range and a road user or factor; the map and every panel update."],
+  people:["Toronto Police Service KSI collisions","Who is killed or seriously injured","The people hurt in KSI collisions, how they were travelling and how old they were, and the vehicles and drivers involved. The filters at right apply here too."],
+  areas:["Toronto Police Service KSI collisions","Wards & neighbourhoods compared","How the city's wards and neighbourhoods compare, in total and per square kilometre. Click an area on the map or in the table to select it for every tab."],
+  about:["About the data","Sources, definitions and caveats",""],
+};
+function renderHeader(){ const h=HEAD[S.tab]; $("hEyebrow").textContent=`${h[0]} · ${Y0}–${YN}`; $("hTitle").textContent=h[1]; $("hSub").textContent=h[2];
+  $("filters").hidden=S.tab==="about"; $("measCtl").hidden=S.tab==="people";
+  document.querySelectorAll(".mw").forEach(e=>e.textContent=MW[S.meas]);
+  // chips: active filters, removable
+  const ch=[]; for(const i of curSel()) ch.push({t:AREA_NAME[S.lvl][i],f:()=>{curSel().delete(i);}});
+  if(S.y0!==Y0||S.y1!==YN) ch.push({t:yrsLabel(),f:()=>{S.y0=Y0;S.y1=YN;}});
+  if(S.inv>=0) ch.push({t:"Involving "+invLabel(),f:()=>{S.inv=-1;}});
+  $("chips").innerHTML=ch.length? ch.map((c,i)=>`<button type="button" class="chip" data-i="${i}" aria-label="Remove filter ${esc(c.t)}">${esc(c.t)}<span class="x" aria-hidden="true">&times;</span></button>`).join("")+(ch.length>1?`<button type="button" class="linkbtn" id="chipAll">Clear all</button>`:"") : "";
+  $("chips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ ch[+b.dataset.i].f(); syncControls(); render(); });
+  if($("chipAll")) $("chipAll").onclick=()=>{ curSel().clear(); S.y0=Y0; S.y1=YN; S.inv=-1; syncControls(); render(); };
+  ["foot1","foot2","foot3"].forEach(id=>$(id).innerHTML=FOOT());
+}
+function render(){ renderHeader(); updateSummary();
+  if(S.tab==="collisions") renderCollisions(); else if(S.tab==="people") renderPeople(); else if(S.tab==="areas") renderAreas(); else renderAbout(); }
+
+// years
+["yFrom","yTo"].forEach(id=>{ $(id).innerHTML=YEARS.map(y=>`<option value="${y}">${y}${y===updDate.getUTCFullYear()?" (partial)":""}</option>`).join(""); });
+function syncControls(){ $("yFrom").value=S.y0; $("yTo").value=S.y1; $("involve").value=String(S.inv);
+  document.querySelectorAll("[data-lvl]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lvl===S.lvl));
+  document.querySelectorAll("[data-meas]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.meas===S.meas));
+  document.querySelectorAll("[data-norm]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.norm===S.norm));
+  $("areaLab").textContent=S.lvl==="ward"?"Ward":"Neighbourhood"; $("areaInput").placeholder=S.lvl==="ward"?"Search a ward or number...":"Search a neighbourhood..."; }
+$("yFrom").onchange=()=>{ S.y0=+$("yFrom").value; if(S.y0>S.y1) S.y1=S.y0; syncControls(); render(); };
+$("yTo").onchange=()=>{ S.y1=+$("yTo").value; if(S.y1<S.y0) S.y0=S.y1; syncControls(); render(); };
+$("involve").onchange=()=>{ S.inv=+$("involve").value; S.pick=null; render(); };
+document.querySelectorAll("[data-lvl]").forEach(b=>b.onclick=()=>{ if(S.lvl===b.dataset.lvl) return; S.lvl=b.dataset.lvl; S.pick=null; S.sort={key:"v",dir:-1}; syncControls(); comboRefresh(); render(); });
+document.querySelectorAll("[data-meas]").forEach(b=>b.onclick=()=>{ S.meas=b.dataset.meas; syncControls(); render(); });
+document.querySelectorAll("[data-norm]").forEach(b=>b.onclick=()=>{ S.norm=b.dataset.norm; syncControls(); render(); });
+function toggleArea(i){ const s=curSel(); s.has(i)?s.delete(i):s.add(i); S.pick=null; comboRefresh(); render(); }
+
+// combobox
+let comboRefresh=()=>{};
+function updateSummary(){ $("comboSummary").textContent=selLabel(); }
+(function(){
+  const btn=$("comboBtn"), panel=$("comboPanel"), input=$("areaInput"), list=$("areaList");
+  let matches=[], active=-1, q="";
+  const open=()=>{ panel.hidden=false; btn.setAttribute("aria-expanded","true"); input.value=""; filter(""); setTimeout(()=>input.focus(),0); };
+  const close=()=>{ panel.hidden=true; btn.setAttribute("aria-expanded","false"); active=-1; };
+  const hl=(t)=>{ if(!q) return esc(t); const i=t.toLowerCase().indexOf(q); return i<0?esc(t):esc(t.slice(0,i))+"<mark>"+esc(t.slice(i,i+q.length))+"</mark>"+esc(t.slice(i+q.length)); };
+  const totals=()=>{ const t=new Float64Array(areaGeo().length); for(let i=0;i<NC;i++){ const a=areaOf(i); if(a>=0) t[a]+=C.K[i]+C.S[i]; } return t; };
+  function filter(raw){ q=(raw||"").trim().toLowerCase(); const names=AREA_NAME[S.lvl];
+    matches=names.map((n,i)=>i).filter(i=>!q||names[i].toLowerCase().includes(q)); if(S.lvl==="nb") matches.sort((a,b)=>names[a].localeCompare(names[b])); active=-1; paint(); }
+  function paint(){ const sel=curSel(), names=AREA_NAME[S.lvl], t=totals();
+    if(!matches.length){ list.innerHTML=`<li class="combo-empty">No ${S.lvl==="ward"?"ward":"neighbourhood"} matches “${esc(q)}”</li>`; foot(); return; }
+    list.innerHTML=matches.map((i,ix)=>`<li role="option" id="opt${ix}" data-i="${i}" aria-selected="${sel.has(i)}" class="${ix===active?"active":""}"><span class="cb">${sel.has(i)?"&#10003;":""}</span><span class="nm">${hl(names[i])}</span><span class="reg">${fmt(t[i])} KSI</span></li>`).join("");
+    input.setAttribute("aria-activedescendant",active>=0?"opt"+active:""); foot(); }
+  function foot(){ const n=curSel().size; $("selCount").textContent=n?`${n} selected`:"Showing all of Toronto"; }
+  btn.onclick=()=>panel.hidden?open():close();
+  input.oninput=()=>filter(input.value);
+  input.onkeydown=e=>{ if(e.key==="ArrowDown"){ active=Math.min(active+1,matches.length-1); paint(); list.children[active]?.scrollIntoView({block:"nearest"}); e.preventDefault(); }
+    else if(e.key==="ArrowUp"){ active=Math.max(active-1,0); paint(); list.children[active]?.scrollIntoView({block:"nearest"}); e.preventDefault(); }
+    else if(e.key==="Enter"){ const p=active>=0?matches[active]:matches[0]; if(p!=null){ toggleArea(p); paint(); } e.preventDefault(); }
+    else if(e.key==="Escape"){ close(); btn.focus(); } };
+  list.onmousedown=e=>{ const li=e.target.closest("li[data-i]"); if(li){ e.preventDefault(); toggleArea(+li.dataset.i); paint(); } };
+  $("selClear").onclick=()=>{ curSel().clear(); S.pick=null; paint(); render(); };
+  document.addEventListener("mousedown",e=>{ if(!$("combo").contains(e.target)) close(); });
+  comboRefresh=()=>{ updateSummary(); if(!panel.hidden){ filter(input.value); } else foot(); };
+})();
+
+// tabs
+const tabs=[...document.querySelectorAll(".app-tab")];
+function setTab(t,push){ S.tab=t; tabs.forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t));
+  document.querySelectorAll(".tab-panel").forEach(p=>p.hidden=p.id!=="panel-"+t); hideTT(); render();
+  if(push){ try{ history.replaceState(null,"","#"+t); }catch(e){} } }
+tabs.forEach(b=>b.onclick=()=>setTab(b.dataset.tab,true));
+document.querySelector(".app-tabs").addEventListener("keydown",e=>{ const i=tabs.indexOf(document.activeElement); if(i<0) return;
+  if(e.key==="ArrowRight"||e.key==="ArrowLeft"){ const n=tabs[(i+(e.key==="ArrowRight"?1:tabs.length-1))%tabs.length]; n.focus(); n.click(); e.preventDefault(); } });
+$("appUpd").textContent=`Data to ${fmtDate(updDate)}`;
+
+// redraw canvases/SVG on theme change
+const rerender=()=>{ render(); };
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change",rerender);
+new MutationObserver(rerender).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+window.addEventListener("scroll",hideTT,{passive:true});
+
+syncControls();
+const h=(location.hash||"").slice(1);
+setTab(["collisions","people","areas","about"].includes(h)?h:"collisions",false);
+})();
+</script>
+</body>
+</html>
